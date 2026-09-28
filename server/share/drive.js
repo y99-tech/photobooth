@@ -4,7 +4,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { json } = require('./http');
+const { json, mimeOf } = require('./http');
 
 let cached = { token: null, exp: 0, key: '' };
 
@@ -51,7 +51,7 @@ async function send({ file, cfg, vars }) {
   };
   const boundary = 'pb' + crypto.randomBytes(8).toString('hex');
   const body = Buffer.concat([
-    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: image/jpeg\r\n\r\n`),
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${mimeOf(file)}\r\n\r\n`),
     fs.readFileSync(file),
     Buffer.from(`\r\n--${boundary}--`)
   ]);

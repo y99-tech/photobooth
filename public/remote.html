@@ -46,6 +46,8 @@
         <div class="seg" id="modes">
           <button class="btn" data-mode="single">Single</button>
           <button class="btn" data-mode="strip">4-shot</button>
+          <button class="btn" data-mode="gif">GIF</button>
+          <button class="btn" data-mode="boomerang">Boomerang</button>
         </div>
         <h3>Frame</h3>
         <div class="seg" id="tpls">
@@ -69,7 +71,7 @@
 
       <div class="card" id="lastCard" style="display:none">
         <h3 style="margin-top:0">Latest photo</h3>
-        <a id="lastLink" target="_blank"><img id="lastImg" class="photo" alt=""></a>
+        <a id="lastLink" target="_blank"><img id="lastImg" class="photo" alt=""><video id="lastVid" class="photo hidden" autoplay loop muted playsinline></video></a>
         <div class="status" id="lastStatus" style="margin-top:10px"></div>
         <div class="row hidden" id="printRow" style="justify-content:flex-start;margin-top:10px">
           <button class="btn" data-print="1">🖨️ Print</button>
@@ -143,7 +145,12 @@
     es.addEventListener('photo', (e) => {
       const p = JSON.parse(e.data);
       $('#lastCard').style.display = '';
-      $('#lastImg').src = p.url;
+      $('#lastImg').src = p.kind === 'video' ? '' : p.url;
+      $('#lastVid').classList.toggle('hidden', p.kind !== 'video');
+      $('#lastImg').classList.toggle('hidden', p.kind === 'video');
+      if (p.kind === 'video') $('#lastVid').src = p.url;
+      $('#printRow').dataset.kind = p.kind;
+      document.querySelectorAll('[data-print]').forEach((b) => (b.disabled = p.kind !== 'photo'));
       $('#lastLink').href = '/p/' + p.id;
       lastId = p.id;
       $('#lastStatus').innerHTML = Object.entries(p.shares || {}).map(([k, s]) => `<span class="pill ${s.status}">${k}: ${s.status}</span>`).join('');

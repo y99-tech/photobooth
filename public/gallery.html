@@ -9,8 +9,9 @@
   <style>
     /* ?slideshow=1 → full-screen live slideshow for a second TV / projector */
     #show { position: fixed; inset: 0; background: #000; display: none; }
-    #show img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity 1.2s; }
-    #show img.on { opacity: 1; }
+    #show .slide { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity 1.2s; }
+    #show .slide.on { opacity: 1; }
+    .grid video { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; display: block; }
     #show .cap { position: absolute; bottom: 3vh; left: 3vw; right: 3vw; display: flex; justify-content: space-between; align-items: flex-end; color: #fff; }
     #show .qrs { background: #fff; padding: 8px; border-radius: 12px; width: 16vmin; }
     #show .qrs img { position: static; opacity: 1; width: 100%; height: auto; }
@@ -25,7 +26,6 @@
     <div class="row" style="margin-top:20px"><button class="btn ghost hidden" id="more">Load more</button></div>
   </div>
   <div id="show">
-    <img id="a"><img id="b">
     <div class="cap">
       <div><h1 class="serif" id="stitle" style="margin:0;font-size:5vmin;font-weight:500"></h1><div id="scount" style="font-size:2.4vmin;opacity:.8"></div></div>
       <div style="text-align:center;font-size:2vmin"><div class="qrs"><img src="/api/qr.svg?to=/gallery" alt=""></div>Scan for all photos</div>
@@ -44,7 +44,9 @@
   function tile(p) {
     const a = document.createElement('a');
     a.href = '/p/' + p.id;
-    a.innerHTML = `<img loading="lazy" src="${p.url}" alt="">`;
+    a.innerHTML = p.kind === 'video'
+      ? `<video src="${p.url}" autoplay loop muted playsinline preload="metadata"></video>`
+      : `<img loading="lazy" src="${p.url}" alt="">`;
     return a;
   }
 
@@ -71,13 +73,24 @@
     if (slideshow) { idx = -1; next(); } // show new photo straight away
   });
 
-  // Slideshow: crossfade, newest first, then cycle.
-  let idx = -1, front = $('#a'), back = $('#b');
+  // Slideshow: crossfade, newest first, then cycle. Boomerangs play as videos.
+  let idx = -1, front = null;
   function next() {
     if (!photos.length) return;
     idx = (idx + 1) % Math.min(photos.length, 200);
-    back.onload = () => { back.classList.add('on'); front.classList.remove('on'); [front, back] = [back, front]; };
-    back.src = photos[idx].url;
+    const p = photos[idx];
+    const el = document.createElement(p.kind === 'video' ? 'video' : 'img');
+    el.className = 'slide';
+    if (p.kind === 'video') Object.assign(el, { autoplay: true, loop: true, muted: true, playsInline: true });
+    const ready = () => {
+      requestAnimationFrame(() => el.classList.add('on'));
+      const old = front;
+      front = el;
+      if (old) { old.classList.remove('on'); setTimeout(() => old.remove(), 1300); }
+    };
+    if (p.kind === 'video') el.onloadeddata = ready; else el.onload = ready;
+    el.src = p.url;
+    $('#show').prepend(el);
   }
   if (slideshow) { next(); setInterval(next, 6000); }
 })();

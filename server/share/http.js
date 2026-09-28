@@ -2,8 +2,14 @@
 const fs = require('fs');
 const path = require('path');
 
+const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', mp4: 'video/mp4', webm: 'video/webm' };
+
+function mimeOf(file) {
+  return MIME[path.extname(file).slice(1).toLowerCase()] || 'application/octet-stream';
+}
+
 function fileBlob(file) {
-  return new Blob([fs.readFileSync(file)], { type: 'image/jpeg' });
+  return new Blob([fs.readFileSync(file)], { type: mimeOf(file) });
 }
 
 function fileName(file) {
@@ -33,4 +39,4 @@ function need(cfg, keys, name) {
   }
 }
 
-module.exports = { fileBlob, fileName, json, need };
+module.exports = { fileBlob, fileName, json, need, mimeOf };

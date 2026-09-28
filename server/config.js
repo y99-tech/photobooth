@@ -29,7 +29,8 @@ const DEFAULTS = {
   booth: {
     camera: 'auto', // "auto" | "dslr" | "webcam"
     countdown: 3,
-    mode: 'single', // "single" | "strip" (4 shots)
+    mode: 'single', // default mode: "single" | "strip" | "gif" | "boomerang"
+    modes: ['single', 'strip', 'gif', 'boomerang'], // modes guests can pick
     template: 'elegant', // "elegant" | "polaroid" | "minimal" | "none"
     accent: '#c9a36b',
     mirrorPreview: true,
@@ -42,6 +43,21 @@ const DEFAULTS = {
     remotePin: '',
     // Keys that trigger a shot: Bluetooth shutter buttons / presenter clickers / USB arcade buttons.
     triggerKeys: ['Enter', ' ', 'AudioVolumeUp', 'AudioVolumeDown', 'PageDown', 'PageUp', 'ArrowRight', 'F5', 'b']
+  },
+
+  animation: {
+    size: 720, // long edge (px) of GIFs and boomerang videos
+    gifFrames: 4, // poses in GIF mode
+    gifFrameMs: 600, // how long each GIF pose shows
+    boomerangSeconds: 1.5, // length of the recorded burst
+    boomerangFps: 15,
+    boomerangFormat: 'video', // "video" (MP4/WebM, small & sharp) | "gif"
+    videoLoops: 2 // back-and-forth loops in the saved video (recording takes this long; players loop it anyway)
+  },
+
+  video: {
+    ffmpeg: 'ffmpeg', // path to ffmpeg (optional)
+    convertToMp4: true // convert WebM recordings to H.264 MP4 when ffmpeg is installed
   },
 
   dslr: {
@@ -184,7 +200,8 @@ function publicView() {
     Object.entries(c.share).map(([k, v]) => [k, !!v.enabled])
   );
   return { event: c.event, booth: { ...c.booth, remotePin: undefined }, weddingName: c.share.wedding.name, dslr: { livePreview: c.dslr.livePreview }, share: enabled,
-    print: { enabled: !!c.print.enabled, auto: !!c.print.auto, maxCopies: c.print.maxCopies } };
+    print: { enabled: !!c.print.enabled, auto: !!c.print.auto, maxCopies: c.print.maxCopies },
+    animation: c.animation };
 }
 
 module.exports = { load, get, save, publicView, DEFAULTS, ROOT, CONFIG_PATH };

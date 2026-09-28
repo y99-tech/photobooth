@@ -83,6 +83,8 @@
     'dslr.driver': 'auto | gphoto2 | digicam (Windows)', qrTarget: 'local | remote', autoShare: 'one per line: drive, ftp, wedding, facebook, instagram, telegram',
     'print.scaling': 'fill (edge to edge) | fit (whole photo)', 'print.media': 'CUPS paper size: 4x6, w288h432, A6, Postcard… (empty = default)',
     'print.extraOptions': 'extra CUPS -o options, one per line', 'print.auto': 'print every photo automatically',
+    'booth.modes': 'one per line: single, strip, gif, boomerang', 'animation.boomerangFormat': 'video (MP4/WebM) | gif',
+    'video.convertToMp4': 'needs ffmpeg installed — makes boomerangs play on every phone & Instagram',
     'booth.triggerKeys': 'one key per line (Bluetooth shutter / clicker keys)', 'share.wedding.urlPath': 'dot path to the photo URL in the JSON reply, e.g. data.url',
     publicBaseUrl: 'empty = auto (http://LAN-IP:port)', caption: 'placeholders: {greeting} {guest} {title} {hashtag} {url} {date}'
   };
@@ -153,6 +155,7 @@
     ['Event & greetings', ['event']],
     ['Booth', ['booth']],
     ['Camera', ['dslr']],
+    ['GIF & Boomerang', ['animation', 'video']],
     ['Printing', ['print']],
     ['Sharing', ['share']]
   ];
@@ -230,11 +233,11 @@
   async function photos() {
     const list = await fetch('/api/photos?limit=30').then((r) => r.json());
     $('#photos').innerHTML = list.map((p) => `
-      <tr><td><a href="/p/${p.id}" target="_blank"><img src="${p.url}"></a></td>
+      <tr><td><a href="/p/${p.id}" target="_blank">${p.kind === 'video' ? `<video src="${p.url}" muted autoplay loop playsinline style="width:70px;border-radius:6px;display:block"></video>` : `<img src="${p.url}">`}</a></td>
       <td>${new Date(p.createdAt).toLocaleString()}<br><small class="muted">${p.guest || ''} ${p.greeting ? '“' + p.greeting.slice(0, 40) + '”' : ''}</small></td>
       <td><div class="status">${Object.entries(p.shares).map(([k, s]) => `<span class="pill ${s.status}" title="${(s.error || s.url || '').replace(/"/g, '')}">${k}</span>`).join('')}</div></td>
       <td>${Object.values(p.shares).some((s) => s.status === 'failed') ? `<button class="btn" data-retry="${p.id}">Retry</button>` : ''}
-        <button class="btn ghost" data-print="${p.id}" title="Printed ${p.prints || 0}×">🖨️ ${p.prints ? p.prints : ''}</button></td></tr>`).join('') || '<tr><td class="muted">No photos yet</td></tr>';
+        ${p.kind === 'photo' ? `<button class="btn ghost" data-print="${p.id}" title="Printed ${p.prints || 0}×">🖨️ ${p.prints ? p.prints : ''}</button>` : `<span class="pill">${p.kind === 'video' ? '🔁 video' : '✨ GIF'}</span>`}</td></tr>`).join('') || '<tr><td class="muted">No photos yet</td></tr>';
     document.querySelectorAll('[data-print]').forEach((b) => (b.onclick = () => doPrint(b.dataset.print)));
     document.querySelectorAll('[data-retry]').forEach((b) => (b.onclick = async () => { await api('/api/admin/retry/' + b.dataset.retry, { method: 'POST' }); photos(); }));
   }

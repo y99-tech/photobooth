@@ -15,9 +15,10 @@ A light but powerful photobooth for weddings and events.
   - **Digital wedding platforms**, or any HTTP API
   - **Facebook Page**, **Instagram**, **Telegram**
   - The guest's own share sheet (WhatsApp, Instagram and more)
+- **Modes:** single photo, 4-shot collage, animated **GIF** (4 poses) and **boomerang** video (a short burst that plays forward and back, saved as MP4). Greetings and frames go on all of them.
 - **Printing:** a Print button with copies on the share screen, or auto-print every photo. Works on Pi/Linux (CUPS) and Windows. Includes a paper counter and per-guest limits.
 - **Reliable:** every upload is queued on disk and retried, so photos survive a flaky venue Wi-Fi or a reboot
-- **Light:** 4 npm dependencies, no build step, no database and no native modules. It runs on a Pi 3B+ and up.
+- **Light:** 5 small npm dependencies, no build step, no database and no native modules. It runs on a Pi 3B+ and up.
 
 | Screen | URL |
 |---|---|
@@ -99,6 +100,30 @@ Set the camera to **JPEG** (or RAW+JPEG). **Turn auto power-off off** on the cam
 - **Modes:** *Single* photo, or a *4-shot* 2×2 collage.
 - **Offline:** fonts are bundled (Great Vibes, Playfair Display), so it all works without internet.
 
+## GIF & boomerang
+
+Guests choose a mode on the start screen: **📷 Single**, **🎞️ 4-shot**, **✨ GIF** or **🔁 Boomerang**. You can also switch modes from the phone remote.
+
+- **GIF:** the booth takes 4 quick poses, about 1 second apart, and turns them into a looping animated GIF.
+- **Boomerang:** after the countdown the booth records a 1.5-second burst, then plays it forward and backward on a loop. It's saved as a video.
+- **Greetings and frames:** the greeting, name, frame template and custom PNG frame are added to every frame of the animation. Guests see the animation playing on the review screen.
+- **Sharing:** GIFs and boomerangs work everywhere a photo does: the QR guest page (Save, and Share to WhatsApp or Instagram), the gallery and slideshow, Google Drive, FTP, the wedding platform, email and Telegram (as a looping animation). Facebook gets boomerangs as a Page video, and Instagram gets them as a Reel. Instagram doesn't accept GIFs.
+- **Printing:** GIFs and boomerangs can't be printed, so the Print button is hidden for them.
+- **Install ffmpeg (recommended):**
+  - The kiosk browser records the boomerang as MP4 if it can. Otherwise it records WebM.
+  - With `ffmpeg` installed, the booth converts WebM to H.264 MP4 in under a second. H.264 MP4 plays on iPhones, WhatsApp and Instagram.
+  - The Pi installer adds ffmpeg. On Windows, run `winget install ffmpeg`.
+- **DSLR:** GIF mode uses full captures from the camera. Boomerang uses the live view, so `dslr.livePreview` must be on.
+
+| Setting (Admin → GIF & Boomerang) | What it does |
+|---|---|
+| `booth.modes` | Which modes guests can pick (Booth tab) |
+| `size` | The long edge of GIFs and videos in pixels (default 720) |
+| `gifFrames`, `gifFrameMs` | The number of poses, and how long each one shows |
+| `boomerangSeconds`, `boomerangFps` | The length and smoothness of the burst |
+| `boomerangFormat` | `video` (small and sharp, the default) or `gif` |
+| `videoLoops` | How many back-and-forth loops go into the saved video. Recording takes that long (about 3 s per loop). |
+
 ## Printing
 
 Turn it on in **Admin → Printing**. Then add the printer in the **Printer** card and press **Test print**.
@@ -162,7 +187,7 @@ The guest page has:
 server/            Node server (Express), camera drivers, upload queue
   share/           one small module per destination
 public/            kiosk, phone remote, guest page, gallery, admin (plain HTML/JS)
-data/photos/       final photos (JPEG)       ← back this up
+data/photos/       final photos (JPEG), GIFs and boomerang videos   ← back this up
 data/photos.json   photo list + upload status
 config.json        your settings (created on first save; holds secrets, git-ignored)
 ```

@@ -2,6 +2,7 @@
 REM Start the photobooth on Windows and open it full-screen (touch screens supported).
 REM DSLR on Windows: install digiCamControl (https://digicamcontrol.com) and enable its
 REM web server (Settings > Webserver) for live view. Or use the camera's USB webcam utility.
+REM Boomerang videos: install ffmpeg (winget install ffmpeg) so they are saved as MP4.
 cd /d "%~dp0\.."
 if not exist node_modules (call npm install --omit=dev)
 start "Photobooth server" /min cmd /c "node server\index.js"

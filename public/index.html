@@ -16,10 +16,7 @@
     <h1 class="serif" id="evTitle">Photobooth</h1>
     <h2 id="evSub"></h2>
     <div class="tap">TAP TO<br>START</div>
-    <div class="row" style="margin-top:calc(var(--u)*2.5)" id="modeRow">
-      <button class="btn ghost" data-mode="single">📷 Single</button>
-      <button class="btn ghost" data-mode="strip">🎞️ 4-shot</button>
-    </div>
+    <div class="row" style="margin-top:calc(var(--u)*2.5)" id="modeRow"></div>
     <div class="corner left">
       <div class="qr-mini"><img src="/api/qr.svg?to=/gallery" alt=""></div>
       <div class="hint">Scan on the venue Wi-Fi to see &amp; download all photos</div>
@@ -63,7 +60,7 @@
   <!-- 4. Share -->
   <section id="shareScr" class="screen hidden">
     <div class="split">
-      <div class="pic"><img id="finalImg" alt=""></div>
+      <div class="pic"><img id="finalImg" alt=""><video id="finalVid" class="hidden" autoplay loop muted playsinline></video></div>
       <div class="side" style="text-align:center">
         <h3>Scan to download 📲</h3>
         <div class="qr-big"><img id="qrImg" alt=""></div>
@@ -102,6 +99,7 @@
 
   <script src="/osk.js"></script>
   <script src="/compose.js"></script>
+  <script src="/animate.js"></script>
   <script src="/booth.js"></script>
 </body>
 </html>

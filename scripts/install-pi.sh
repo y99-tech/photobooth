@@ -9,6 +9,8 @@ USER_NAME="${SUDO_USER:-$USER}"
 echo "==> Installing packages"
 sudo apt-get update
 sudo apt-get install -y gphoto2 curl unclutter
+# ffmpeg turns boomerang recordings into MP4 that plays on every phone and on Instagram
+sudo apt-get install -y ffmpeg
 # Printing: CUPS + Gutenprint (Canon SELPHY, DNP, Mitsubishi, Epson, many dye-sub photo printers)
 sudo apt-get install -y cups printer-driver-gutenprint
 sudo usermod -aG lpadmin "$USER_NAME"

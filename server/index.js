@@ -8,6 +8,7 @@ const store = require('./store');
 const camera = require('./camera');
 const share = require('./share');
 const printer = require('./printer');
+const media = require('./media');
 const { baseUrl, lanIp } = require('./util');
 
 config.load();
@@ -76,6 +77,7 @@ printer.onChange((job) => {
 
 function startPrint(photo, copies, source) {
   const c = config.get().print;
+  if ((photo.kind || 'photo') !== 'photo') throw new Error('Only photos can be printed (not GIFs or videos)');
   copies = Math.max(1, Number(copies) || 1);
   if (source === 'guest') {
     copies = Math.min(copies, c.maxCopies || 1);
@@ -142,6 +144,11 @@ app.post('/api/dslr/capture', async (req, res) => {
   }
 });
 
+// GIF encoder used by the kiosk (served from node_modules, works offline).
+app.get('/vendor/gifenc.esm.js', (req, res) =>
+  res.type('text/javascript').sendFile(path.join(config.ROOT, 'node_modules', 'gifenc', 'dist', 'gifenc.esm.js'))
+);
+
 app.use('/raw', express.static(store.DIRS.raw, { maxAge: 0 }));
 app.use('/photos', express.static(store.DIRS.photos, { maxAge: '7d', immutable: true }));
 app.get('/overlay.png', (req, res) => (fs.existsSync(OVERLAY) ? res.sendFile(OVERLAY) : res.status(404).end()));
@@ -153,6 +160,9 @@ function summary(p) {
     url: `/photos/${p.file}`,
     page: `${baseUrl()}/p/${p.id}`,
     publicUrl: share.publicUrl(p),
+    kind: p.kind || 'photo', // "photo" | "gif" | "video"
+    mode: p.mode || null,
+    mime: p.mime || 'image/jpeg',
     greeting: p.greeting,
     guest: p.guest,
     prints: p.prints || 0,
@@ -163,17 +173,23 @@ function summary(p) {
   };
 }
 
-// Final composed JPEG (with greeting/frame) from the kiosk.
-app.post('/api/photos', express.raw({ type: 'image/jpeg', limit: '40mb' }), (req, res) => {
+// Final composed photo (JPEG), GIF or boomerang video (MP4/WebM) from the kiosk.
+const UPLOAD_TYPES = ['image/jpeg', 'image/gif', 'video/mp4', 'video/webm'];
+app.post('/api/photos', express.raw({ type: UPLOAD_TYPES, limit: '80mb' }), async (req, res) => {
   if (!req.body || !req.body.length) return res.status(400).json({ error: 'No image' });
-  if (req.body[0] !== 0xff || req.body[1] !== 0xd8) return res.status(400).json({ error: 'Not a JPEG' });
+  const type = media.detect(req.body);
+  if (!type) return res.status(400).json({ error: 'Unsupported file (JPEG, GIF, MP4 or WebM only)' });
   const id = store.newId();
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const file = `${stamp}_${id}.jpg`;
-  fs.writeFileSync(path.join(store.DIRS.photos, file), req.body);
+  const saved = `${stamp}_${id}.${type.ext}`;
+  fs.writeFileSync(path.join(store.DIRS.photos, saved), req.body);
+  const { name: file, type: final } = await media.normalize(store.DIRS.photos, saved, type, req.body);
   const photo = store.add({
     id,
     file,
+    kind: final.kind,
+    mime: final.mime,
+    mode: String(req.query.mode || '').slice(0, 20),
     greeting: String(req.query.greeting || '').slice(0, 500),
     guest: String(req.query.guest || '').slice(0, 100),
     camera: String(req.query.camera || ''),
@@ -188,7 +204,7 @@ app.post('/api/photos', express.raw({ type: 'image/jpeg', limit: '40mb' }), (req
   }
   share.enqueue(photo, config.get().autoShare || []);
   let printError = null;
-  if (config.get().print.enabled && config.get().print.auto && req.query.print !== '0') {
+  if (config.get().print.enabled && config.get().print.auto && final.kind === 'photo' && req.query.print !== '0') {
     try { startPrint(store.get(id), config.get().print.autoCopies || 1, 'admin'); } catch (e) { printError = e.message; }
   }
   broadcast('photo', summary(store.get(id)));

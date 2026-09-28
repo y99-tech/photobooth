@@ -3,12 +3,14 @@ const { fileBlob, fileName, json, need } = require('./http');
 
 async function send({ file, cfg, vars }) {
   need(cfg, ['botToken', 'chatId'], 'Telegram');
+  // GIFs and MP4 boomerangs loop silently as Telegram "animations"; WebM goes as a video.
+  const [method, field] = /\.(gif|mp4)$/i.test(file) ? ['sendAnimation', 'animation'] : /\.webm$/i.test(file) ? ['sendVideo', 'video'] : ['sendPhoto', 'photo'];
   const form = new FormData();
   form.append('chat_id', cfg.chatId);
   form.append('caption', vars.caption.slice(0, 1024));
-  form.append('photo', fileBlob(file), fileName(file));
+  form.append(field, fileBlob(file), fileName(file));
   const body = await json(
-    await fetch(`https://api.telegram.org/bot${cfg.botToken}/sendPhoto`, { method: 'POST', body: form, signal: AbortSignal.timeout(60000) }),
+    await fetch(`https://api.telegram.org/bot${cfg.botToken}/${method}`, { method: 'POST', body: form, signal: AbortSignal.timeout(120000) }),
     'Telegram'
   );
   return { messageId: body.result && body.result.message_id };

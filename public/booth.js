@@ -15,6 +15,15 @@
   let idleTimer = null;
   let busy = false;
   let copies = 1;
+  let anim = null; // { frames: composed canvases, seq, frameMs, player }
+
+  const MODES = {
+    single: '📷 Single',
+    strip: '🎞️ 4-shot',
+    gif: '✨ GIF',
+    boomerang: '🔁 Boomerang'
+  };
+  const isAnim = (m = mode) => m === 'gif' || m === 'boomerang';
 
   const TEMPLATES = [
     ['elegant', 'Elegant'],
@@ -47,7 +56,9 @@
     document.title = cfg.event.title + ' · Photobooth';
     $('#evTitle').textContent = cfg.event.title;
     $('#evSub').textContent = [cfg.event.subtitle, cfg.event.date].filter(Boolean).join(' · ');
-    mode = mode || cfg.booth.mode;
+    const modes = (cfg.booth.modes || Object.keys(MODES)).filter((m) => MODES[m]);
+    cfg.booth.modes = modes.length ? modes : ['single'];
+    mode = cfg.booth.modes.includes(mode) ? mode : cfg.booth.modes.includes(cfg.booth.mode) ? cfg.booth.mode : cfg.booth.modes[0];
     template = template || cfg.booth.template;
 
     const want = cfg.booth.camera;
@@ -78,7 +89,18 @@
   }
 
   function renderModes() {
-    $$('#modeRow [data-mode]').forEach((b) => b.classList.toggle('sel', b.dataset.mode === mode));
+    const row = $('#modeRow');
+    row.classList.toggle('hidden', cfg.booth.modes.length < 2);
+    row.innerHTML = cfg.booth.modes
+      .map((m) => `<button class="btn ghost${m === mode ? ' sel' : ''}" data-mode="${m}">${MODES[m]}</button>`)
+      .join('');
+  }
+
+  function setMode(m) {
+    if (!cfg.booth.modes.includes(m) || busy) return;
+    mode = m;
+    renderModes();
+    report();
   }
 
   function renderTemplates() {
@@ -138,7 +160,13 @@
     }
   }
 
+  function stopAnim() {
+    if (anim && anim.player) anim.player.stop();
+    anim = null;
+  }
+
   function home() {
+    stopAnim();
     stopWebcam();
     stopDslrLive();
     shots = [];
@@ -197,6 +225,7 @@
     if (busy) return;
     busy = true;
     shots = [];
+    stopAnim();
     show('live');
     const useWebcam = camera === 'webcam';
     $('#video').classList.toggle('hidden', !useWebcam);
@@ -206,10 +235,12 @@
     try {
       if (useWebcam) await startWebcam();
       else startDslrLive();
-      const total = mode === 'strip' ? 4 : 1;
+      if (mode === 'boomerang') await shootBoomerang(useWebcam);
+      const total = mode === 'strip' ? 4 : mode === 'gif' ? cfg.animation.gifFrames || 4 : mode === 'boomerang' ? 0 : 1;
       for (let i = 0; i < total; i++) {
-        $('#shotinfo').textContent = total > 1 ? `Photo ${i + 1} of ${total}` : '';
-        await countdown(i === 0 ? cfg.booth.countdown : Math.min(3, cfg.booth.countdown));
+        $('#shotinfo').textContent = total > 1 ? `${mode === 'gif' ? 'Pose' : 'Photo'} ${i + 1} of ${total}` : '';
+        const between = mode === 'gif' ? 1 : 3; // GIF frames come quickly, like a flipbook
+        await countdown(i === 0 ? cfg.booth.countdown : Math.min(between, cfg.booth.countdown));
         flash();
         shots.push(await captureOne());
         if (!useWebcam && i < total - 1) startDslrLive();
@@ -228,6 +259,27 @@
       }
       home();
     }
+  }
+
+  async function shootBoomerang(useWebcam) {
+    const src = useWebcam ? $('#video') : $('#dslrLive');
+    if (!useWebcam && !cfg.dslr.livePreview) throw new Error('Boomerang needs DSLR live view (or use the webcam)');
+    if (!useWebcam) await waitForFrame(src);
+    $('#shotinfo').textContent = '🔁 Boomerang — get ready to move!';
+    await countdown(cfg.booth.countdown);
+    $('#shotinfo').textContent = '🔴 Move! Wave, jump, cheers!';
+    const frames = await Animate.burst(src, {
+      seconds: cfg.animation.boomerangSeconds || 1.5,
+      fps: cfg.animation.boomerangFps || 15,
+      maxWidth: cfg.animation.size || 720,
+      mirror: useWebcam && cfg.booth.mirrorPreview
+    });
+    if (frames.length < 3) throw new Error('No live picture from the camera');
+    shots = frames.map((img) => ({ img }));
+  }
+
+  async function waitForFrame(img) {
+    for (let i = 0; i < 50 && !img.naturalWidth; i++) await sleep(100);
   }
 
   async function countdown(n) {
@@ -258,6 +310,7 @@
 
   function redraw() {
     if (!shots.length) return;
+    if (isAnim()) return redrawAnim();
     composed = Compose.compose({
       images: shots.map((s) => s.img),
       template,
@@ -273,6 +326,41 @@
     box.appendChild(composed);
   }
 
+  function composeOpts(images, longEdge) {
+    return {
+      images,
+      template,
+      greeting: $('#greeting').value.trim(),
+      guest: $('#guest').value.trim(),
+      event: cfg.event,
+      accent: cfg.booth.accent,
+      longEdge,
+      overlay
+    };
+  }
+
+  // Every frame gets the same frame template + greeting, then plays in a loop.
+  function redrawAnim() {
+    stopAnim();
+    const size = cfg.animation.size || 720;
+    const frames = shots.map((s) => Compose.compose(composeOpts([s.img], size)));
+    const seq = Animate.sequence(frames.length, mode);
+    const frameMs = mode === 'gif' ? cfg.animation.gifFrameMs || 600 : Math.round(1000 / (cfg.animation.boomerangFps || 15));
+    const canvas = document.createElement('canvas');
+    anim = { frames, seq, frameMs, player: Animate.player(canvas, frames, seq, frameMs) };
+    composed = canvas;
+    const box = $('#reviewPic');
+    box.innerHTML = '';
+    box.appendChild(canvas);
+  }
+
+  async function encodeAnim() {
+    const { frames, seq, frameMs } = anim;
+    const asVideo = mode === 'boomerang' && cfg.animation.boomerangFormat !== 'gif' && Animate.videoMime();
+    if (asVideo) return Animate.encodeVideo(frames, seq, frameMs, cfg.animation.videoLoops || 2);
+    return Animate.encodeGif(frames, seq, frameMs);
+  }
+
   let redrawT;
   function redrawSoon() {
     clearTimeout(redrawT);
@@ -283,16 +371,32 @@
   async function accept() {
     if (screen !== 'review' || !composed || busy) return;
     busy = true;
+    const btn = $('#acceptBtn');
+    const label = btn.textContent;
     try {
-      const blob = await Compose.toJpeg(composed, cfg.booth.jpegQuality);
+      let blob;
+      if (isAnim()) {
+        btn.disabled = true;
+        btn.textContent = mode === 'boomerang' ? '⏳ Making your boomerang…' : '⏳ Making your GIF…';
+        blob = await encodeAnim();
+      } else {
+        blob = await Compose.toJpeg(composed, cfg.booth.jpegQuality);
+      }
       const q = new URLSearchParams({
         greeting: $('#greeting').value.trim(),
         guest: $('#guest').value.trim(),
         camera,
+        mode,
         raw: shots.map((s) => s.raw).filter(Boolean).map((r) => r.split('/').pop()).join(',')
       });
-      current = await api('/api/photos?' + q, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
-      $('#finalImg').src = current.url;
+      current = await api('/api/photos?' + q, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
+      stopAnim();
+      const isVideo = current.kind === 'video';
+      $('#finalImg').classList.toggle('hidden', isVideo);
+      $('#finalVid').classList.toggle('hidden', !isVideo);
+      if (isVideo) { $('#finalVid').src = current.url; $('#finalVid').play().catch(() => {}); }
+      else { $('#finalVid').removeAttribute('src'); $('#finalImg').src = current.url; }
+      $('#printBox').classList.toggle('hidden', !cfg.print.enabled || current.kind !== 'photo');
       $('#qrImg').src = `/api/photos/${current.id}/qr.svg`;
       renderShareStatus(current);
       $$('#socialBtns .btn').forEach((b) => (b.disabled = false));
@@ -305,6 +409,8 @@
       toast('⚠️ Could not save: ' + e.message, 5000);
     } finally {
       busy = false;
+      btn.disabled = false;
+      btn.textContent = label;
     }
   }
 
@@ -406,7 +512,7 @@
       case 'accept': if (screen === 'review') accept(); break;
       case 'retake': if (screen === 'review') startSession(); break;
       case 'home': if (!busy) home(); break;
-      case 'mode': if (['single', 'strip'].includes(value)) { mode = value; renderModes(); report(); } break;
+      case 'mode': if (screen === 'attract') setMode(value); break;
       case 'template': if (TEMPLATES.some(([k]) => k === value)) { template = value; renderTemplates(); redraw(); report(); } break;
       case 'greeting': $('#greeting').value = String(value || '').slice(0, 160); syncGreetChips(); redraw(); break;
       case 'camera': if (['dslr', 'webcam'].includes(value)) { camera = value; $('#camLabel').textContent = value === 'dslr' ? '📷 DSLR' : '🎥 Webcam'; report(); } break;
@@ -428,7 +534,7 @@
   // ---------------- wire up ----------------
   $('#attract').addEventListener('click', (e) => {
     const m = e.target.closest('[data-mode]');
-    if (m) { mode = m.dataset.mode; renderModes(); report(); return; }
+    if (m) { setMode(m.dataset.mode); return; }
     if (e.target.closest('#fsBtn') || e.target.closest('.corner')) return;
     startSession();
   });
@@ -436,7 +542,7 @@
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen().catch(() => {});
   };
-  $('#retakeBtn').onclick = () => startSession();
+  $('#retakeBtn').onclick = () => { if (!busy) startSession(); };
   $('#acceptBtn').onclick = accept;
   $('#doneBtn').onclick = home;
   $('#emailBtn').onclick = sendEmail;

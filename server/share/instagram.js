@@ -3,8 +3,19 @@
 const { json, need } = require('./http');
 const share = () => require('./index');
 
-async function send({ photo, cfg, vars }) {
+async function send({ photo, file, cfg, vars }) {
   need(cfg, ['igUserId', 'accessToken'], 'Instagram');
+  if (/\.gif$/i.test(file)) {
+    const e = new Error('Instagram does not accept GIFs — use boomerang video mode for Instagram');
+    e.permanent = true;
+    throw e;
+  }
+  if (/\.webm$/i.test(file)) {
+    const e = new Error('Instagram needs MP4 video — install ffmpeg on the booth so boomerangs are saved as MP4');
+    e.permanent = true;
+    throw e;
+  }
+  const isVideo = /\.mp4$/i.test(file);
   let imageUrl = share().publicUrl(require('../store').get(photo.id));
   if (!imageUrl) {
     const e = new Error('Instagram needs a public image URL — enable FTP hosting, the wedding platform, or public Google Drive');
@@ -18,17 +29,18 @@ async function send({ photo, cfg, vars }) {
   const api = `https://graph.facebook.com/${cfg.graphVersion}/${cfg.igUserId}`;
   const token = encodeURIComponent(cfg.accessToken);
   const created = await json(
-    await fetch(`${api}/media?image_url=${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(vars.caption)}&access_token=${token}`, { method: 'POST' }),
+    // Boomerang videos are published as Reels.
+    await fetch(`${api}/media?${isVideo ? `media_type=REELS&video_url=` : 'image_url='}${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(vars.caption)}&access_token=${token}`, { method: 'POST' }),
     'Instagram (create)'
   );
   // Wait until Instagram has processed the container.
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < (isVideo ? 60 : 20); i++) {
     const st = await json(
       await fetch(`https://graph.facebook.com/${cfg.graphVersion}/${created.id}?fields=status_code&access_token=${token}`),
       'Instagram (status)'
     );
     if (st.status_code === 'FINISHED') break;
-    if (st.status_code === 'ERROR') throw new Error('Instagram could not process the image');
+    if (st.status_code === 'ERROR') throw new Error(`Instagram could not process the ${isVideo ? 'video' : 'image'}`);
     await new Promise((r) => setTimeout(r, 2000));
   }
   const pub = await json(

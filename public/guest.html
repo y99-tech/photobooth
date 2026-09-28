@@ -37,10 +37,19 @@
   $('#title').textContent = cfg.event.title;
   $('#sub').textContent = [cfg.event.subtitle, cfg.event.date, cfg.event.hashtag].filter(Boolean).join(' · ');
   if (!p) { $('#photo').replaceWith(Object.assign(document.createElement('p'), { textContent: 'Photo not found.' })); return; }
-  document.title = cfg.event.title + ' — photo';
-  $('#photo').src = p.url;
+  const ext = p.url.split('.').pop();
+  const noun = p.kind === 'video' ? 'boomerang' : p.kind === 'gif' ? 'GIF' : 'photo';
+  document.title = cfg.event.title + ' — ' + noun;
+  if (p.kind === 'video') {
+    const v = Object.assign(document.createElement('video'), { src: p.url, autoplay: true, loop: true, muted: true, playsInline: true, className: 'photo' });
+    $('#photo').replaceWith(v);
+    $('#hint').textContent = 'On iPhone: tap “Share…” → “Save Video”.';
+  } else {
+    $('#photo').src = p.url;
+  }
   $('#dl').href = p.url;
-  $('#dl').download = (cfg.event.title || 'photobooth').replace(/\W+/g, '-') + '-' + id + '.jpg';
+  $('#dl').textContent = '⬇ Save ' + noun;
+  $('#dl').download = (cfg.event.title || 'photobooth').replace(/\W+/g, '-') + '-' + id + '.' + ext;
   if (p.greeting) $('#greet').textContent = '“' + p.greeting + '”' + (p.guest ? ' — ' + p.guest : '');
 
   const text = [p.greeting, cfg.event.hashtag].filter(Boolean).join(' ');
@@ -50,7 +59,7 @@
   $('#shareBtn').onclick = async () => {
     try {
       const blob = await fetch(p.url).then((r) => r.blob());
-      const file = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+      const file = new File([blob], 'photobooth-' + id + '.' + ext, { type: p.mime || blob.type });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], text });
       } else if (navigator.share) {

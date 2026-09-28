@@ -3,6 +3,7 @@ const { fileBlob, fileName, json, need } = require('./http');
 
 async function send({ file, cfg, vars }) {
   need(cfg, ['pageId', 'pageAccessToken'], 'Facebook');
+  if (/\.(mp4|webm)$/i.test(file)) return sendVideo({ file, cfg, vars });
   const form = new FormData();
   form.append('source', fileBlob(file), fileName(file));
   form.append('message', vars.caption);
@@ -14,6 +15,21 @@ async function send({ file, cfg, vars }) {
   });
   const body = await json(res, 'Facebook');
   return { postId: body.post_id || body.id, url: body.post_id ? `https://facebook.com/${body.post_id}` : null };
+}
+
+// Boomerangs are posted as Page videos.
+async function sendVideo({ file, cfg, vars }) {
+  const form = new FormData();
+  form.append('source', fileBlob(file), fileName(file));
+  form.append('description', vars.caption);
+  form.append('access_token', cfg.pageAccessToken);
+  const res = await fetch(`https://graph-video.facebook.com/${cfg.graphVersion}/${cfg.pageId}/videos`, {
+    method: 'POST',
+    body: form,
+    signal: AbortSignal.timeout(180000)
+  });
+  const body = await json(res, 'Facebook (video)');
+  return { postId: body.id, url: body.id ? `https://facebook.com/${body.id}` : null };
 }
 
 async function test(cfg) {
