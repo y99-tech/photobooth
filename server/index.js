@@ -148,7 +148,7 @@ app.post('/api/dslr/capture', async (req, res) => {
 
 // GIF encoder used by the kiosk (served from node_modules, works offline).
 app.get('/vendor/gifenc.esm.js', (req, res) =>
-  res.type('text/javascript').sendFile(path.join(config.ROOT, 'node_modules', 'gifenc', 'dist', 'gifenc.esm.js'))
+  res.type('text/javascript').sendFile(path.join(path.dirname(require.resolve('gifenc/package.json')), 'dist', 'gifenc.esm.js'))
 );
 
 app.use('/raw', express.static(store.DIRS.raw, { maxAge: 0 }));
@@ -364,10 +364,29 @@ app.use(express.static(PUBLIC, { maxAge: '1h' }));
 
 const port = Number(process.env.PORT) || config.get().port;
 share.start();
-app.listen(port, '0.0.0.0', () => {
-  console.log(`\n  📸 Photobooth running`);
-  console.log(`     Booth screen : http://localhost:${port}/`);
-  console.log(`     Phone remote : ${baseUrl()}/remote`);
-  console.log(`     Guest gallery: ${baseUrl()}/gallery`);
-  console.log(`     Admin        : http://localhost:${port}/admin  (PIN ${config.get().adminPin === '1234' ? '1234 — change it!' : 'set'})\n`);
+const server = app.listen(port, '0.0.0.0');
+
+// Resolves when the booth is reachable; the Windows desktop app waits on this.
+const ready = new Promise((resolve, reject) => {
+  server.once('listening', () => {
+    console.log(`\n  📸 Photobooth running`);
+    console.log(`     Booth screen : http://localhost:${port}/`);
+    console.log(`     Phone remote : ${baseUrl()}/remote`);
+    console.log(`     Guest gallery: ${baseUrl()}/gallery`);
+    console.log(`     Admin        : http://localhost:${port}/admin  (PIN ${config.get().adminPin === '1234' ? '1234 — change it!' : 'set'})\n`);
+    resolve({ port, url: `http://localhost:${port}/`, baseUrl: baseUrl() });
+  });
+  server.once('error', (e) => {
+    if (e.code === 'EADDRINUSE') e.message = `Port ${port} is already in use — is the photobooth already running?`;
+    reject(e);
+  });
 });
+
+if (require.main === module) {
+  ready.catch((e) => {
+    console.error(`\n  ✗ ${e.message}\n`);
+    process.exit(1);
+  });
+}
+
+module.exports = { ready, server, dataDir: store.DIRS.data };

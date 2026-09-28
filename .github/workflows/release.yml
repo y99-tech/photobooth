@@ -1,0 +1,95 @@
+# Builds the Windows 11 app on a real Windows machine and publishes an easy-to-download
+# GitHub Release: Setup.exe (installer), Portable.exe (no install) and a Raspberry Pi / Linux zip.
+# Runs on every push that changes the app, on version tags (v1.2.3) and by hand (Actions → Run workflow).
+name: Build & release
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+    paths:
+      - 'server/**'
+      - 'public/**'
+      - 'desktop/**'
+      - 'scripts/**'
+      - 'package.json'
+      - '.github/workflows/release.yml'
+      - '.github/release-notes.md'
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows app
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install
+        working-directory: desktop
+        run: npm ci
+      - name: Check the booth's packages are bundled
+        working-directory: desktop
+        shell: bash
+        run: |
+          node -e "const r=require('../package.json').dependencies,d=require('./package.json').dependencies;
+          const bad=Object.keys(r).filter(k=>r[k]!==d[k]);
+          if(bad.length){console.error('desktop/package.json dependencies out of sync: '+bad+' — run npm run sync-deps in desktop/');process.exit(1)}"
+      - name: Build installer + portable app
+        working-directory: desktop
+        run: npx electron-builder --win --x64 --publish never
+      - name: Smoke test (server starts inside the packaged app)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "desktop/dist/win-unpacked/Photobooth.exe" -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 40; $i++) {
+            Start-Sleep -Seconds 2
+            try { $r = Invoke-RestMethod http://localhost:8080/api/status; $ok = $true; break } catch {}
+          }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Get-Process Photobooth -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not $ok) { throw "Photobooth did not answer on http://localhost:8080" }
+          Write-Host "Booth is up on $($r.platform)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            desktop/dist/Photobooth-Setup-*.exe
+            desktop/dist/Photobooth-Portable-*.exe
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: out
+      - name: Version & Raspberry Pi / Linux package
+        id: v
+        run: |
+          VERSION=$(node -p "require('./desktop/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          git archive --format=zip --prefix=photobooth/ -o "out/Photobooth-RaspberryPi-Linux-$VERSION.zip" HEAD -- . ':!desktop' ':!.github'
+          ls -la out
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.v.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: Photobooth ${{ steps.v.outputs.version }}
+          body_path: .github/release-notes.md
+          make_latest: true
+          files: out/*

@@ -1,0 +1,83 @@
+{
+  "name": "photobooth-desktop",
+  "productName": "Photobooth",
+  "version": "1.0.0",
+  "description": "Photobooth for Windows 11 \u2014 DSLR or webcam, greetings, green screen, GIF & boomerang, printing and sharing.",
+  "main": "main.js",
+  "author": "Photobooth",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64 --publish never",
+    "sync-deps": "node -e \"const r=require('../package.json'),p=require('./package.json');p.dependencies=r.dependencies;require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\\n')\""
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "app.photobooth.desktop",
+    "productName": "Photobooth",
+    "artifactName": "Photobooth-Setup-${version}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "assets/**",
+      {
+        "from": "..",
+        "to": "booth",
+        "filter": [
+          "server/**",
+          "public/**",
+          "scripts/print-windows.ps1",
+          "package.json"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Photobooth",
+      "runAfterFinish": true,
+      "include": "assets/installer.nsh",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico"
+    },
+    "asar": false,
+    "portable": {
+      "artifactName": "Photobooth-Portable-${version}.exe"
+    }
+  },
+  "dependencies": {
+    "basic-ftp": "^6.2.1",
+    "express": "^5.2.1",
+    "gifenc": "^1.0.3",
+    "nodemailer": "^10.0.11",
+    "qrcode": "^1.5.4"
+  }
+}

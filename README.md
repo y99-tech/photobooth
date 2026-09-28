@@ -44,8 +44,10 @@ Open `http://localhost:8080/`, then go to `/admin` to set the couple's names, gr
 
 ### Raspberry Pi / Linux
 
+Download **`Photobooth-RaspberryPi-Linux-….zip`** from [Releases](../../releases/latest) and unzip it. You can also clone the repo. Then run:
+
 ```bash
-git clone <this repo> photobooth && cd photobooth
+cd photobooth
 ./scripts/install-pi.sh      # gphoto2 + Chromium + Node, service, kiosk autostart
 sudo reboot
 ```
@@ -56,12 +58,30 @@ To start it by hand, run `./scripts/kiosk.sh`.
 - **Hardware:** a Pi 4 or 5 with 2 GB+ of RAM is recommended. Use a powered USB hub if the camera draws power over USB.
 - **"Could not claim the USB device"?** The desktop auto-mounted the camera. The installer turns that off. To fix it on the spot, run `pkill -f gvfs-gphoto2`.
 
-### Windows
+### Windows 10 / 11: the easy way
 
-1. Install [Node.js](https://nodejs.org).
-2. Double-click `scripts\start-windows.bat`. It opens Edge full-screen in kiosk mode.
-3. **DSLR on Windows:** install [digiCamControl](https://digicamcontrol.com) (Canon, Nikon, Sony) and turn on its web server (*Settings → Webserver*) for live view. The booth finds it automatically (`dslr.driver: auto`).
-   Alternatively, run your camera's own webcam utility (Canon EOS Webcam Utility, Sony Imaging Edge Webcam and so on) and choose the **Webcam** camera.
+1. Go to the repository's **[Releases](../../releases/latest)** page and download **`Photobooth-Setup-….exe`**.
+2. Double-click it.
+   - If SmartScreen appears, click **More info → Run anyway**. The app isn't code-signed yet.
+   - Click **Yes** when Windows asks for permission. The installer uses it to let guests' phones through the firewall.
+3. Photobooth opens full-screen and adds a Start-menu shortcut and a desktop shortcut.
+
+The app includes everything it needs, so there's no Node.js to install. Photos and settings are saved in **Documents\Photobooth**. `Photobooth-Portable-….exe` runs without installing.
+
+| In the app | |
+|---|---|
+| **Ctrl + Shift + A** | Admin and settings |
+| **Ctrl + Shift + F** | Full screen on/off |
+| **Ctrl + Shift + Q** | Quit |
+| **Tray icon 📷** | Photos folder, slideshow, *Start with Windows*, and the address phones use |
+
+- **DSLR on Windows:** install [digiCamControl](https://digicamcontrol.com) (Canon, Nikon, Sony) and turn on its web server (*Settings → Webserver*) for live view. The booth finds it automatically. You can also use your camera's own webcam utility and choose the **Webcam** camera.
+- **Running from source:** double-click `scripts\start-windows.bat` (needs [Node.js](https://nodejs.org)).
+
+**How releases are built:** the `Build & release` GitHub Action builds the installer on a Windows machine and checks that the packaged app starts. It then publishes the release, with the Raspberry Pi/Linux zip alongside.
+- **Every push:** the release for the current version is refreshed.
+- **New version:** raise `version` in `desktop/package.json` to publish a new release.
+- **Changing the server's npm packages:** run `npm run sync-deps` in `desktop/`.
 
 ## Cameras
 
