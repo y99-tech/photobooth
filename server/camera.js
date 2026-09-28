@@ -171,4 +171,12 @@ async function capture(destDir) {
   }
 }
 
-module.exports = { driver, detect, previewHandler, capture, stopPreview };
+// Battery level in % (gphoto2 cameras that report it). Skipped while the camera is in use.
+async function battery() {
+  if (busy || previewProc || driver() !== 'gphoto2') return null;
+  const out = await run(['--get-config', '/main/status/batterylevel'], 5000);
+  const m = out.match(/Current:\s*(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+
+module.exports = { battery, driver, detect, previewHandler, capture, stopPreview };

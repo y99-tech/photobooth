@@ -14,6 +14,7 @@ const DEFAULTS = {
   qrTarget: 'local',
 
   event: {
+    id: '', // set automatically (used to keep each event's photos apart)
     title: 'Sarah & Adam',
     subtitle: 'Our Wedding Day',
     date: '',
@@ -88,6 +89,12 @@ const DEFAULTS = {
     holdMs: 800, // how long a gesture must be held
     smileThreshold: 0.6,
     clapSensitivity: 0.5
+  },
+
+  leads: {
+    // Optional marketing opt-in on the email box: "Send me news & offers from <business>".
+    enabled: false,
+    business: 'Your Photobooth Co.'
   },
 
   guestbook: {
@@ -272,7 +279,7 @@ function publicView() {
     animation: c.animation, greenScreen: c.greenScreen, branding: c.branding, sound: c.sound, handsFree: c.handsFree,
     guestbook: { maxSeconds: c.guestbook.maxSeconds, countdown: c.guestbook.countdown },
     guestUploads: { enabled: c.guestUploads.enabled, requireApproval: c.guestUploads.requireApproval, maxUploadMB: c.guestUploads.maxUploadMB },
-    mosaic: c.mosaic };
+    mosaic: c.mosaic, leads: { enabled: c.leads.enabled, business: c.leads.business } };
 }
 
 module.exports = { load, get, save, publicView, DEFAULTS, ROOT, CONFIG_PATH };

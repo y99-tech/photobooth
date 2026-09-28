@@ -20,6 +20,11 @@
     @media (max-width: 600px) { label.f { grid-template-columns: 1fr; gap: 4px; } }
     .tabs { display: flex; gap: 6px; flex-wrap: wrap; position: sticky; top: 0; background: var(--bg); padding: 10px 0; z-index: 5; }
     .tabs .btn { min-height: 42px; font-size: 15px; }
+    .hgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .hgrid div { background: var(--panel-2); border-radius: 12px; padding: 10px; font-size: 14px; }
+    .hgrid b { display: block; font-size: 24px; }
+    #hours i { flex: 1; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 2px; position: relative; }
+    #hours i span { position: absolute; bottom: -18px; left: 0; right: 0; text-align: center; font-size: 10px; font-style: normal; color: var(--muted); }
     .testrow { display: flex; gap: 10px; align-items: center; margin: 8px 0 4px; }
     .testrow .msg { font-size: 14px; }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -42,6 +47,41 @@
       <a class="btn ghost" href="https://www.paypal.com/donate/?business=mohamed2000youssry%40gmail.com&item_name=Buy+me+a+coffee+-+Photobooth&currency_code=USD" target="_blank" rel="noopener" title="Support the developer via PayPal">☕ Buy me a coffee</a>
     </div>
     <div class="card" id="sys"></div>
+
+    <div class="card">
+      <h2 style="margin-top:0">🎉 Event &amp; profiles</h2>
+      <p class="muted">Each event keeps its own photos. Save the whole setup (names, greetings, frames, logo, backgrounds, music, sharing) as a profile and reload it for the next client in one tap.</p>
+      <div id="evNow" style="margin-bottom:10px"></div>
+      <div class="row" style="justify-content:flex-start">
+        <button class="btn" id="evSave">💾 Save current setup as profile</button>
+        <button class="btn ghost" id="evNew">➕ Start a new event…</button>
+      </div>
+      <table id="profiles" style="margin-top:12px"></table>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">🎁 Keepsake for the couple</h2>
+      <p class="muted">One download with every photo, strip, GIF, boomerang, guest upload and video message, plus an offline <b>guestbook album</b> (each photo with its greeting — print it to PDF) and the highlight video.</p>
+      <div class="row" style="justify-content:flex-start">
+        <a class="btn primary" id="zipBtn" href="#">⬇ Download keepsake ZIP</a>
+        <button class="btn" id="hlBtn">🎬 Make highlight video</button>
+        <a class="btn ghost hidden" id="hlDl" href="#">▶ Highlight video</a>
+      </div>
+      <div class="muted" id="hlMsg" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">📊 Stats <span class="muted" id="stEvent" style="font-size:16px"></span></h2>
+      <div class="hgrid" id="stats"></div>
+      <h3>Photos per hour</h3>
+      <div id="hours" style="display:flex;align-items:flex-end;gap:3px;height:110px"></div>
+      <h3>Sharing</h3>
+      <div id="shareStats"></div>
+      <div class="row" style="justify-content:flex-start;margin-top:12px">
+        <a class="btn ghost" id="leadsBtn" href="#">⬇ Leads (CSV)</a>
+        <span class="muted" id="leadsInfo"></span>
+      </div>
+    </div>
     <div class="tabs" id="tabs"></div>
     <form id="form"></form>
     <div class="tabs"><button class="btn primary" id="save">💾 Save settings</button><span id="saved" class="muted" style="align-self:center"></span></div>
@@ -192,7 +232,7 @@
     ['Green screen', ['greenScreen']],
     ['Branding & sound', ['branding', 'sound']],
     ['Hands-free', ['handsFree']],
-    ['Guestbook, uploads & mosaic', ['guestbook', 'guestUploads', 'mosaic']],
+    ['Guestbook, uploads & mosaic', ['guestbook', 'guestUploads', 'mosaic', 'leads']],
     ['Printing', ['print']],
     ['Sharing', ['share']]
   ];
@@ -344,6 +384,43 @@
     document.querySelectorAll('[data-delbg]').forEach((b) => (b.onclick = async () => bgs(await api('/api/admin/backgrounds/' + b.dataset.delbg, { method: 'DELETE' }))));
   }
 
+  // ---------- events & profiles ----------
+  function renderProfiles(r) {
+    $('#evNow').innerHTML = `Current event: <b>${esc(cfg.event.title)}</b> <span class="muted">(${esc(r.current)})</span>`;
+    $('#profiles').innerHTML = r.profiles.map((p) => `<tr><td><b>${esc(p.name)}</b><br><small class="muted">${esc(p.title)} ${esc(p.date || '')} · saved ${new Date(p.savedAt).toLocaleString()}</small></td>
+      <td>${p.current ? '<span class="pill done">current</span>' : `<button class="btn" data-load="${p.id}">Load</button> <button class="btn ghost" data-delp="${p.id}">🗑️</button>`}</td></tr>`).join('') || '<tr><td class="muted">No saved profiles yet.</td></tr>';
+    document.querySelectorAll('[data-load]').forEach((b) => (b.onclick = async () => {
+      if (!confirm('Load this event? Unsaved changes to the current setup will be lost (its photos stay safe).')) return;
+      renderProfiles(await api(`/api/admin/profiles/${b.dataset.load}/load`, { method: 'POST' }));
+      location.reload();
+    }));
+    document.querySelectorAll('[data-delp]').forEach((b) => (b.onclick = async () => {
+      if (confirm('Delete this saved profile? (Photos are not deleted.)')) renderProfiles(await api('/api/admin/profiles/' + b.dataset.delp, { method: 'DELETE' }));
+    }));
+  }
+  async function profiles() { renderProfiles(await api('/api/admin/profiles')); }
+
+  // ---------- keepsake ----------
+  async function highlight(poll) {
+    const h = await api('/api/admin/highlight');
+    $('#hlDl').classList.toggle('hidden', h.status !== 'done');
+    $('#hlDl').href = '/api/admin/highlight.mp4?pin=' + encodeURIComponent(pin) + '&t=' + Date.now();
+    $('#hlMsg').textContent = h.status === 'running' ? `⏳ Making the highlight video (${h.slides || ''} slides)…` : h.status === 'failed' ? '❌ ' + h.error : h.status === 'done' ? '✅ Highlight video ready — it is included in the ZIP.' : '';
+    if (h.status === 'running' && poll) setTimeout(() => highlight(true), 3000);
+  }
+
+  // ---------- stats ----------
+  async function stats() {
+    const s = await api('/api/admin/stats');
+    $('#stEvent').textContent = '· ' + s.event;
+    const tile = (l, v) => `<div>${l}<b>${v}</b></div>`;
+    $('#stats').innerHTML = tile('Total', s.total) + Object.entries(s.byType).map(([k, v]) => tile(k, v)).join('') + tile('Prints', s.prints) + tile('Named guests', s.guests) + tile('Greetings', s.greetings) + tile('Leads', s.leads);
+    const max = Math.max(1, ...s.hours);
+    $('#hours').innerHTML = s.hours.map((n, h) => `<i style="height:${(n / max) * 100}%" title="${h}:00 — ${n}"><span>${h % 3 === 0 ? h : ''}</span></i>`).join('');
+    $('#shareStats').innerHTML = Object.entries(s.shares).map(([t, v]) => `<span class="pill done">${t}: ${v.done} ✓</span> ${v.failed ? `<span class="pill failed">${v.failed} ✗</span>` : ''} ${v.waiting ? `<span class="pill queued">${v.waiting} ⏳</span>` : ''}`).join(' ') || '<span class="muted">Nothing shared yet.</span>';
+    $('#leadsInfo').textContent = cfg.leads && cfg.leads.enabled ? `${s.leads} opt-ins collected` : 'Turn on leads (Guestbook, uploads & mosaic tab) to collect marketing opt-ins.';
+  }
+
   async function start() {
     try { cfg = await api('/api/admin/config'); } catch (e) { $('#err').textContent = e.message; return; }
     sessionStorage.setItem('adminPin', pin);
@@ -354,6 +431,12 @@
     photos();
     printers();
     bgs();
+    profiles();
+    highlight();
+    stats();
+    setInterval(stats, 15000);
+    $('#zipBtn').href = '/api/admin/keepsake.zip?pin=' + encodeURIComponent(pin);
+    $('#leadsBtn').href = '/api/admin/leads.csv?pin=' + encodeURIComponent(pin);
     setInterval(photos, 10000);
     setInterval(printers, 10000);
   }
@@ -370,6 +453,21 @@
     document.querySelectorAll('[data-pf]').forEach((x) => x.classList.toggle('sel', x === b));
     photos();
   }));
+  $('#evSave').onclick = async () => {
+    const name = prompt('Profile name', cfg.event.title);
+    if (name) renderProfiles(await api('/api/admin/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }));
+  };
+  $('#evNew').onclick = async () => {
+    const title = prompt('New event name (e.g. "Lina & Omar")');
+    if (!title) return;
+    const date = prompt('Date (optional, e.g. 2026-10-12)') || '';
+    if (!confirm('Tip: save the current setup as a profile first if you want to reuse it. Start "' + title + '" now?')) return;
+    await api('/api/admin/events/new', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, date }) });
+    location.reload();
+  };
+  $('#hlBtn').onclick = async () => {
+    try { await api('/api/admin/highlight', { method: 'POST' }); highlight(true); } catch (e) { $('#hlMsg').textContent = '❌ ' + e.message; }
+  };
   $('#bgUp').onclick = async () => {
     let list;
     for (const f of $('#bgFiles').files) {

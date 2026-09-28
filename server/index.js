@@ -9,6 +9,9 @@ const camera = require('./camera');
 const share = require('./share');
 const printer = require('./printer');
 const media = require('./media');
+const events = require('./events');
+const keepsake = require('./keepsake');
+const health = require('./health');
 const { baseUrl, lanIp } = require('./util');
 
 config.load();
@@ -52,7 +55,8 @@ function safeEq(a, b) {
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 }
 function adminAuth(req, res, next) {
-  if (safeEq(req.get('x-pin'), config.get().adminPin)) return next();
+  // (?pin= lets the admin download ZIP / CSV / video files with a plain link)
+  if (safeEq(req.get('x-pin') || req.query.pin, config.get().adminPin)) return next();
   res.status(401).json({ error: 'Wrong PIN' });
 }
 function remoteAuth(req, res, next) {
@@ -253,7 +257,7 @@ app.post('/api/photos', express.raw({ type: UPLOAD_TYPES, limit: '80mb' }), asyn
     mime: final.mime,
     mode: String(req.query.mode || '').slice(0, 20),
     source: 'booth',
-    event: config.get().event.id || null,
+    event: events.currentId(),
     greeting: String(req.query.greeting || '').slice(0, 500),
     guest: String(req.query.guest || '').slice(0, 100),
     camera: String(req.query.camera || ''),
@@ -276,8 +280,9 @@ app.post('/api/photos', express.raw({ type: UPLOAD_TYPES, limit: '80mb' }), asyn
 });
 
 // What guests may see: not hidden, approved, and (by default) no private video messages.
+const inEvent = (p) => (p.event || events.currentId()) === events.currentId();
 function isPublic(p) {
-  if (p.hidden || p.pending) return false;
+  if (p.hidden || p.pending || !inEvent(p)) return false;
   if (p.mode === 'message' && !config.get().guestbook.showInGallery) return false;
   return true;
 }
@@ -285,7 +290,8 @@ function isPublic(p) {
 app.get('/api/photos', (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 60, 2000);
   const kinds = req.query.kind ? String(req.query.kind).split(',') : null;
-  const filter = (p) => (req.query.public ? isPublic(p) : true) && (!kinds || kinds.includes(p.kind || 'photo'));
+  // Only the current event unless ?all=1 (admin).
+  const filter = (p) => (req.query.public ? isPublic(p) : req.query.all || inEvent(p)) && (!kinds || kinds.includes(p.kind || 'photo'));
   let list = store.list({ limit, offset: Number(req.query.offset) || 0, filter }).map(summary);
   if (req.query.order === 'oldest') list = list.reverse();
   res.json(list);
@@ -329,7 +335,7 @@ app.post('/api/guest-uploads', (req, res, next) => {
     greeting: String(req.query.message || '').slice(0, 500),
     guest: String(req.query.guest || '').slice(0, 100),
     pending: !!c.guestUploads.requireApproval,
-    event: c.event.id || null,
+    event: events.currentId(),
     createdAt: Date.now(),
     shares: {}
   });
@@ -364,6 +370,7 @@ app.post('/api/photos/:id/email', (req, res) => {
   if (!p) return res.status(404).json({ error: 'Not found' });
   if (!config.get().share.email.enabled) return res.status(400).json({ error: 'Email is off' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return res.status(400).json({ error: 'Invalid email' });
+  if (config.get().leads.enabled && req.body.consent) saveLead({ email: to, name: p.guest, photoId: p.id });
   share.enqueueWith(p, 'email', { to });
   res.json({ ok: true });
 });
@@ -417,6 +424,90 @@ app.post('/api/admin/test/:target', adminAuth, async (req, res) => {
     res.status(400).json({ ok: false, message: e.message });
   }
 });
+// ---------- leads (marketing opt-in) ----------
+const LEADS = path.join(store.DIRS.data, 'leads.csv');
+const csv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+function saveLead({ email, name, photoId }) {
+  if (!fs.existsSync(LEADS)) fs.writeFileSync(LEADS, '\ufeffdate,event,email,name,photo\n');
+  fs.appendFileSync(LEADS, [new Date().toISOString(), config.get().event.title, email, name, photoId].map(csv).join(',') + '\n');
+}
+app.get('/api/admin/leads.csv', adminAuth, (req, res) => {
+  res.setHeader('Content-Disposition', 'attachment; filename="photobooth-leads.csv"');
+  res.type('text/csv');
+  if (!fs.existsSync(LEADS)) return res.send('\ufeffdate,event,email,name,photo\n');
+  res.sendFile(LEADS);
+});
+
+// ---------- stats ----------
+app.get('/api/admin/stats', adminAuth, (req, res) => {
+  const list = store.all().filter(inEvent);
+  const s = { total: list.length, byType: {}, prints: 0, shares: {}, hours: Array(24).fill(0), guests: new Set(), greetings: 0 };
+  const type = (p) => (p.mode === 'message' ? 'Video messages' : p.source === 'guest' ? 'Guest uploads' : p.mode === 'strip' ? 'Photo strips' : p.kind === 'gif' ? 'GIFs' : p.kind === 'video' ? 'Boomerangs' : 'Photos');
+  for (const p of list) {
+    s.byType[type(p)] = (s.byType[type(p)] || 0) + 1;
+    s.prints += p.prints || 0;
+    s.hours[new Date(p.createdAt).getHours()]++;
+    if (p.guest) s.guests.add(p.guest.trim().toLowerCase());
+    if (p.greeting) s.greetings++;
+    for (const [t, v] of Object.entries(p.shares || {})) {
+      s.shares[t] = s.shares[t] || { done: 0, failed: 0, waiting: 0 };
+      s.shares[t][v.status === 'done' ? 'done' : v.status === 'failed' ? 'failed' : 'waiting']++;
+    }
+  }
+  let leads = 0;
+  try { leads = fs.readFileSync(LEADS, 'utf8').trim().split('\n').length - 1; } catch {}
+  res.json({ ...s, guests: s.guests.size, leads, event: config.get().event.title, print: printer.status() });
+});
+
+// ---------- events & profiles ----------
+app.get('/api/admin/profiles', adminAuth, (req, res) => res.json({ current: events.currentId(), profiles: events.list() }));
+app.post('/api/admin/profiles', adminAuth, (req, res) => res.json({ current: events.currentId(), profiles: events.save((req.body || {}).name) }));
+app.post('/api/admin/profiles/:id/load', adminAuth, (req, res) => {
+  try {
+    events.load(req.params.id);
+    broadcast('remote', { cmd: 'reload' });
+    res.json({ current: events.currentId(), profiles: events.list() });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+app.delete('/api/admin/profiles/:id', adminAuth, (req, res) => {
+  try {
+    res.json({ current: events.currentId(), profiles: events.remove(req.params.id) });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+app.post('/api/admin/events/new', adminAuth, (req, res) => {
+  events.startNew(req.body || {});
+  broadcast('remote', { cmd: 'reload' });
+  res.json({ current: events.currentId(), profiles: events.list() });
+});
+
+// ---------- keepsake ----------
+app.get('/api/admin/keepsake.zip', adminAuth, (req, res) => keepsake.zip(res, events.currentId()));
+app.post('/api/admin/highlight', adminAuth, async (req, res) => {
+  try {
+    await keepsake.highlight(events.currentId());
+    res.json(keepsake.highlightStatus(events.currentId()));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+app.get('/api/admin/highlight', adminAuth, (req, res) => res.json(keepsake.highlightStatus(events.currentId())));
+app.get('/api/admin/highlight.mp4', adminAuth, (req, res) => {
+  const j = keepsake.jobs[events.currentId()];
+  if (!j || j.status !== 'done' || !fs.existsSync(j.file)) return res.status(404).end();
+  res.sendFile(j.file);
+});
+
+// ---------- health (phone remote + admin) ----------
+app.get('/api/health', remoteAuth, async (req, res) => res.json(await health.check()));
+setInterval(async () => {
+  if (!clients.size) return;
+  try { broadcast('health', await health.check()); } catch {}
+}, 30000);
+
 // Moderation: hide / show / approve / delete.
 app.post('/api/admin/photos/:id', adminAuth, (req, res) => {
   const p = store.get(req.params.id);
@@ -523,6 +614,7 @@ app.get('/admin', page('admin.html'));
 app.use(express.static(PUBLIC, { maxAge: '1h' }));
 
 const port = Number(process.env.PORT) || config.get().port;
+events.migrate();
 share.start();
 const server = app.listen(port, '0.0.0.0');
 

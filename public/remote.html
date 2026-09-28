@@ -23,6 +23,13 @@
     .dot.on { background: var(--ok); }
     .seg { display: flex; gap: 8px; flex-wrap: wrap; }
     .seg .btn { flex: 1; }
+    .hgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .hgrid div { background: var(--panel-2); border-radius: 12px; padding: 10px; font-size: 15px; }
+    .hgrid b { display: block; font-size: 20px; }
+    .alert { border-radius: 14px; padding: 12px 14px; margin: 10px 0; font-weight: 600; }
+    .alert.warn { background: #3b2f12; color: #f5c66b; }
+    .alert.error { background: #3b1717; color: #ff8a80; animation: blink 1.2s infinite; }
+    @keyframes blink { 50% { opacity: .55; } }
   </style>
 </head>
 <body>
@@ -51,6 +58,7 @@
           <button class="btn" data-mode="strip">4-shot</button>
           <button class="btn" data-mode="gif">GIF</button>
           <button class="btn" data-mode="boomerang">Boomerang</button>
+          <button class="btn" data-mode="message">Message</button>
         </div>
         <h3>Frame</h3>
         <div class="seg" id="tpls">
@@ -70,6 +78,12 @@
         <h3 style="margin-top:0">Greeting on current photo</h3>
         <textarea id="greet" class="field" maxlength="160" placeholder="Type a greeting and send it to the screen"></textarea>
         <div class="row" style="justify-content:flex-start;margin-top:10px"><button class="btn" id="sendGreet">Send to screen</button></div>
+      </div>
+
+      <div id="alerts"></div>
+      <div class="card" id="healthCard">
+        <h3 style="margin-top:0">🩺 Booth health</h3>
+        <div class="hgrid" id="health"><span class="muted">Checking…</span></div>
       </div>
 
       <div class="card" id="lastCard" style="display:none">
@@ -158,12 +172,39 @@
       lastId = p.id;
       $('#lastStatus').innerHTML = Object.entries(p.shares || {}).map(([k, s]) => `<span class="pill ${s.status}">${k}: ${s.status}</span>`).join('');
     });
+    es.addEventListener('health', (e) => renderHealth(JSON.parse(e.data)));
+    fetch('/api/health', { headers: { 'x-pin': pin } }).then((r) => r.json()).then(renderHealth).catch(() => {});
     es.addEventListener('print', (e) => {
       const d = JSON.parse(e.data);
       const j = d.job;
       const msg = j ? { queued: 'queued', printing: 'printing…', done: 'sent ✓', failed: 'failed: ' + j.error }[j.status] : '';
       $('#printMsg').textContent = [j ? `🖨️ Print ${msg}` : '', paperText(d)].filter(Boolean).join(' · ');
     });
+  }
+
+  // Health panel + alerts (vibrate + beep when a new problem appears).
+  let lastAlerts = '';
+  function renderHealth(h) {
+    if (!h || !h.disk) return;
+    const tile = (label, value) => `<div>${label}<b>${value}</b></div>`;
+    $('#health').innerHTML = [
+      tile('📷 Camera', h.camera.available ? (h.camera.battery != null ? `🔋 ${h.camera.battery}%` : 'OK') : '—'),
+      tile('💾 Free space', h.disk ? `${h.disk.freeGB} GB` : '?'),
+      tile('🧻 Paper', h.print.enabled ? (h.print.paperLeft >= 0 ? h.print.paperLeft : '∞') : 'off'),
+      tile('☁️ Uploads', `${h.uploads.done} ✓ · ${h.uploads.queued} ⏳ · ${h.uploads.failed} ✗`),
+      tile('🌡️ CPU', h.cpuTemp != null ? `${h.cpuTemp}°C` : '—'),
+      tile('📸 Photos', h.photos)
+    ].join('');
+    $('#alerts').innerHTML = (h.alerts || []).map((a) => `<div class="alert ${a.level}">⚠️ ${a.text}</div>`).join('');
+    const key = (h.alerts || []).map((a) => a.text).join('|');
+    if (key && key !== lastAlerts) {
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      try {
+        const ac = new AudioContext(), o = ac.createOscillator(), g = ac.createGain();
+        o.frequency.value = 660; g.gain.value = 0.2; o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.3);
+      } catch {}
+    }
+    lastAlerts = key;
   }
 
   async function print(copies) {

@@ -98,6 +98,8 @@
     renderGreetings();
     $('#greetBox').classList.toggle('hidden', !cfg.booth.allowGuestGreeting);
     $('#uploadQr').classList.toggle('hidden', !cfg.guestUploads.enabled);
+    $('#consentRow').classList.toggle('hidden', !cfg.leads.enabled);
+    $('#consentText').textContent = t('offers', { business: cfg.leads.business || '' });
     $('#uploadHint').classList.toggle('hidden', !cfg.guestUploads.enabled);
     $('#printBox').classList.toggle('hidden', !cfg.print.enabled);
     $('#copiesBox').classList.toggle('hidden', (cfg.print.maxCopies || 1) < 2);
@@ -816,9 +818,10 @@
       await api(`/api/photos/${current.id}/email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to })
+        body: JSON.stringify({ to, consent: $('#consent').checked })
       });
       $('#email').value = '';
+      $('#consent').checked = false;
       if (window.OSK) OSK.hide();
       toast(t('emailSent', { to }));
     } catch (e) {

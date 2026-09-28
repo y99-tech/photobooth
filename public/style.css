@@ -162,6 +162,9 @@ body[data-mode="message"] #review .photo-only { display: none !important; }
 #msgStopBtn { position: absolute; bottom: calc(var(--u) * 2); left: 50%; transform: translateX(-50%); z-index: 5; }
 .split > .pic video { max-width: 100%; max-height: 100%; border-radius: 10px; }
 
+.consent { display: flex; gap: .5em; align-items: center; justify-content: center; margin-top: .5em; font-size: calc(var(--u) * 0.85); color: var(--muted); }
+.consent input { width: calc(var(--u) * 1.6); height: calc(var(--u) * 1.6); accent-color: var(--accent); }
+
 /* ---------- hands-free camera bubble ---------- */
 #hfBox { position: fixed; top: calc(var(--u) * 1); right: calc(var(--u) * 1); z-index: 40; text-align: center; pointer-events: none; }
 #hfBox video, #hfBox img {
