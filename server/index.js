@@ -15,6 +15,30 @@ config.load();
 const app = express();
 const PUBLIC = path.join(config.ROOT, 'public');
 const OVERLAY = path.join(store.DIRS.data, 'overlay.png');
+
+// Host-uploaded assets (logo watermark, background music, mosaic picture), validated by bytes.
+const ASSETS = {
+  logo: { types: { png: 'image/png', jpg: 'image/jpeg' } },
+  music: { types: { mp3: 'audio/mpeg', m4a: 'audio/mp4' } },
+  mosaic: { types: { jpg: 'image/jpeg', png: 'image/png' } }
+};
+function sniffAsset(b) {
+  if (!b || b.length < 12) return null;
+  if (b.readUInt32BE(0) === 0x89504e47) return 'png';
+  if (b[0] === 0xff && b[1] === 0xd8) return 'jpg';
+  if (b.toString('ascii', 0, 3) === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0)) return 'mp3';
+  if (b.toString('ascii', 4, 8) === 'ftyp') return 'm4a';
+  return null;
+}
+function assetFile(name) {
+  const def = ASSETS[name];
+  if (!def) return null;
+  for (const ext of Object.keys(def.types)) {
+    const f = path.join(store.DIRS.data, `${name}.${ext}`);
+    if (fs.existsSync(f)) return { file: f, type: def.types[ext] };
+  }
+  return null;
+}
 const BACKGROUNDS = path.join(store.DIRS.data, 'backgrounds');
 fs.mkdirSync(BACKGROUNDS, { recursive: true });
 
@@ -87,7 +111,9 @@ function startPrint(photo, copies, source) {
     if (left <= 0) throw new Error('This photo has already been printed the maximum number of times');
     copies = Math.min(copies, left);
   }
-  const job = printer.enqueue({ photoId: photo.id, file: store.filePath(photo), copies, source });
+  // 4-shot strips print as a 4x6 sheet with two strips side by side (cut in the middle).
+  const file = photo.printFile ? path.join(store.DIRS.photos, photo.printFile) : store.filePath(photo);
+  const job = printer.enqueue({ photoId: photo.id, file, copies, source });
   store.update(photo.id, { prints: (photo.prints || 0) + job.copies });
   return job;
 }
@@ -131,6 +157,7 @@ app.get('/api/status', async (req, res) => {
     lanIp: lanIp(),
     photos: store.all().length,
     overlay: fs.existsSync(OVERLAY),
+    assets: Object.fromEntries(Object.keys(ASSETS).map((k) => [k, !!assetFile(k)])),
     print: printer.status()
   });
 });
@@ -164,6 +191,12 @@ function listBackgrounds() {
     .map((f) => ({ id: f, name: f.replace(/^\d+_/, '').replace(/\.\w+$/, '').replace(/[-_]+/g, ' '), url: `/backgrounds/${encodeURIComponent(f)}` }));
 }
 app.get('/api/backgrounds', (req, res) => res.json(listBackgrounds()));
+
+app.get('/asset/:name', (req, res) => {
+  const a = assetFile(req.params.name);
+  if (!a) return res.status(404).end();
+  res.type(a.type).sendFile(a.file);
+});
 
 app.get('/overlay.png', (req, res) => (fs.existsSync(OVERLAY) ? res.sendFile(OVERLAY) : res.status(404).end()));
 
@@ -260,6 +293,18 @@ app.post('/api/photos/:id/email', (req, res) => {
   res.json({ ok: true });
 });
 
+// Print-ready version of a photo (e.g. two 2x6 strips on one 4x6 sheet), made by the kiosk.
+app.post('/api/photos/:id/printfile', express.raw({ type: 'image/jpeg', limit: '40mb' }), (req, res) => {
+  const p = store.get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  if (p.printFile) return res.status(409).json({ error: 'Already set' });
+  if (!req.body || req.body[0] !== 0xff || req.body[1] !== 0xd8) return res.status(400).json({ error: 'JPEG only' });
+  const name = p.file.replace(/\.\w+$/, '') + '_print.jpg';
+  fs.writeFileSync(path.join(store.DIRS.photos, name), req.body);
+  store.update(p.id, { printFile: name });
+  res.json({ ok: true });
+});
+
 // Guest taps "Print" on the booth.
 app.post('/api/photos/:id/print', (req, res) => {
   const p = store.get(req.params.id);
@@ -348,6 +393,24 @@ app.delete('/api/admin/backgrounds/:id', adminAuth, (req, res) => {
   broadcast('remote', { cmd: 'reload' });
   res.json(listBackgrounds());
 });
+app.post('/api/admin/asset/:name', adminAuth, express.raw({ type: () => true, limit: '60mb' }), (req, res) => {
+  const def = ASSETS[req.params.name];
+  const ext = sniffAsset(req.body);
+  if (!def) return res.status(404).json({ error: 'Unknown asset' });
+  if (!ext || !def.types[ext]) return res.status(400).json({ error: `Use ${Object.keys(def.types).join(' or ').toUpperCase()}` });
+  for (const e of Object.keys(def.types)) fs.rmSync(path.join(store.DIRS.data, `${req.params.name}.${e}`), { force: true });
+  fs.writeFileSync(path.join(store.DIRS.data, `${req.params.name}.${ext}`), req.body);
+  broadcast('remote', { cmd: 'reload' });
+  res.json({ ok: true });
+});
+app.delete('/api/admin/asset/:name', adminAuth, (req, res) => {
+  const def = ASSETS[req.params.name];
+  if (!def) return res.status(404).json({ error: 'Unknown asset' });
+  for (const e of Object.keys(def.types)) fs.rmSync(path.join(store.DIRS.data, `${req.params.name}.${e}`), { force: true });
+  broadcast('remote', { cmd: 'reload' });
+  res.json({ ok: true });
+});
+
 app.delete('/api/admin/overlay', adminAuth, (req, res) => {
   fs.rmSync(OVERLAY, { force: true });
   broadcast('remote', { cmd: 'reload' });

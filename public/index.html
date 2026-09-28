@@ -43,7 +43,7 @@
   <!-- 3. Review + greeting -->
   <section id="review" class="screen hidden">
     <div class="split">
-      <div class="pic" id="reviewPic"></div>
+      <div class="pic" id="reviewPic"><div id="stickerLayer"></div></div>
       <div class="side">
         <div id="bgBox" class="hidden">
           <h3>Background 🌄</h3>
@@ -51,6 +51,17 @@
         </div>
         <h3>Frame</h3>
         <div class="chips" id="tplChips"></div>
+        <div class="chips" style="margin-top:.5em"><button class="chip" id="beautyBtn">✨ Beauty</button></div>
+        <div id="stickerBox">
+          <h3>Stickers 🎉</h3>
+          <div class="stickers" id="stickerPicks"></div>
+          <div class="row hidden" id="stickerTools" style="justify-content:flex-start;margin-top:.4em">
+            <button class="chip" data-st="smaller">➖</button>
+            <button class="chip" data-st="bigger">➕</button>
+            <button class="chip" data-st="rotate">↻</button>
+            <button class="chip" data-st="remove">🗑️</button>
+          </div>
+        </div>
         <div id="greetBox">
           <h3>Add a greeting 💌</h3>
           <div class="chips" id="greetChips" style="margin:.5em 0"></div>
@@ -109,6 +120,8 @@
   <script src="/compose.js"></script>
   <script src="/animate.js"></script>
   <script src="/chroma.js"></script>
+  <script src="/stickers.js"></script>
+  <script src="/sound.js"></script>
   <script src="/booth.js"></script>
 </body>
 </html>

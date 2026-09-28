@@ -4,7 +4,8 @@
   const $$ = (s) => Array.from(document.querySelectorAll(s));
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  let cfg, status, overlay = null;
+  let cfg, status, overlay = null, logo = null;
+  let beautyOn = true;
   let camera = 'webcam'; // resolved: "dslr" | "webcam"
   let stream = null;
   let screen = 'attract';
@@ -74,6 +75,15 @@
     if (status.overlay) {
       try { overlay = await Compose.loadImage('/overlay.png?' + Date.now()); } catch {}
     }
+    logo = null;
+    if (status.assets && status.assets.logo) {
+      try { logo = await Compose.loadImage('/asset/logo?' + Date.now()); } catch {}
+    }
+    beautyOn = cfg.booth.beauty !== false;
+    Sound.setup(cfg.sound, document.documentElement.lang || 'en');
+    await Stickers.ready();
+    renderStickerPicks();
+    $('#stickerBox').classList.toggle('hidden', cfg.booth.stickers === false);
     await loadBackgrounds();
     renderModes();
     renderTemplates();
@@ -149,15 +159,50 @@
     if (cfg.greenScreen.keyColor === 'auto' && !keyRgb) keyRgb = Chroma.sampleKey(src);
   }
 
-  // Replace the green screen in one shot (cached per background, so typing a greeting stays fast).
+  function fit(img, longEdge) {
+    const w = img.videoWidth || img.naturalWidth || img.width, h = img.videoHeight || img.naturalHeight || img.height;
+    const s = longEdge / Math.max(w, h);
+    if (s >= 1) return img;
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * s);
+    c.height = Math.round(h * s);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c;
+  }
+
+  // Per-shot pipeline: background replacement → beauty. Cached, so typing a greeting stays fast.
   function keyed(shot, longEdge) {
-    if (!gsOn() || !currentBg()) return shot.img;
-    const tag = bgId + '@' + longEdge;
-    if (shot.keyed && shot.keyed.tag === tag) return shot.keyed.canvas;
-    ensureKey(shot.img);
-    const canvas = Chroma.key(shot.img, currentBg(), gsCfg(), longEdge);
-    shot.keyed = { tag, canvas };
-    return canvas;
+    const bgOn = gsOn() && !!currentBg();
+    const tag = [bgOn ? bgId : '-', beautyOn, longEdge].join('|');
+    if (shot.cache && shot.cache.tag === tag) return shot.cache.canvas;
+    let img = fit(shot.img, longEdge);
+    if (bgOn) {
+      ensureKey(shot.img);
+      img = Chroma.key(img, currentBg(), gsCfg(), longEdge);
+    }
+    if (beautyOn) img = Compose.beauty(img, { smoothing: cfg.booth.beautySmoothing ?? 0.6 });
+    shot.cache = { tag, canvas: img };
+    return img;
+  }
+
+  // ---------------- stickers ----------------
+  function renderStickerPicks() {
+    const box = $('#stickerPicks');
+    box.innerHTML = '';
+    for (const id of Stickers.LIST) {
+      const b = document.createElement('button');
+      b.appendChild(Stickers.img(id).cloneNode());
+      b.onclick = () => { Stickers.add(id); stickerTools(); resetIdle(); };
+      box.appendChild(b);
+    }
+  }
+
+  function stickerTools() {
+    $('#stickerTools').classList.toggle('hidden', !Stickers.hasSelection());
+  }
+
+  function attachStickers() {
+    Stickers.attach($('#stickerLayer'), composed, stickerTools);
   }
 
   async function startLiveKey(src, flipX) {
@@ -269,6 +314,9 @@
     shots = [];
     composed = null;
     current = null;
+    Stickers.clear();
+    beautyOn = cfg.booth.beauty !== false;
+    Sound.startMusic();
     $('#greeting').value = '';
     $('#guest').value = '';
     $('#email').value = '';
@@ -323,6 +371,7 @@
     busy = true;
     shots = [];
     stopAnim();
+    Sound.duck(true);
     show('live');
     const useWebcam = camera === 'webcam';
     $('#video').classList.toggle('hidden', !useWebcam);
@@ -386,6 +435,7 @@
     const el = $('#countdown');
     for (let i = n; i > 0; i--) {
       el.textContent = i;
+      Sound.tick(i);
       el.classList.remove('tick');
       void el.offsetWidth;
       el.classList.add('tick');
@@ -396,6 +446,7 @@
   }
 
   function flash() {
+    Sound.shutter();
     const f = $('#flash');
     f.classList.add('on');
     setTimeout(() => f.classList.remove('on'), 120);
@@ -404,6 +455,8 @@
   // ---------------- review ----------------
   function openReview() {
     syncGreetChips();
+    Stickers.clear();
+    $('#beautyBtn').classList.toggle('sel', beautyOn);
     show('review');
     redraw();
   }
@@ -411,19 +464,15 @@
   function redraw() {
     if (!shots.length) return;
     if (isAnim()) return redrawAnim();
-    composed = Compose.compose({
-      images: shots.map((s) => keyed(s, cfg.booth.maxLongEdge)),
-      template,
-      greeting: $('#greeting').value.trim(),
-      guest: $('#guest').value.trim(),
-      event: cfg.event,
-      accent: cfg.booth.accent,
-      longEdge: cfg.booth.maxLongEdge,
-      overlay
-    });
+    composed = Compose.compose(composeOpts(shots.map((s) => keyed(s, cfg.booth.maxLongEdge)), cfg.booth.maxLongEdge));
+    showReviewCanvas(composed);
+  }
+
+  function showReviewCanvas(c) {
     const box = $('#reviewPic');
-    box.innerHTML = '';
-    box.appendChild(composed);
+    box.querySelectorAll('canvas').forEach((x) => x.remove());
+    box.prepend(c);
+    requestAnimationFrame(attachStickers);
   }
 
   function composeOpts(images, longEdge) {
@@ -435,7 +484,10 @@
       event: cfg.event,
       accent: cfg.booth.accent,
       longEdge,
-      overlay
+      overlay,
+      logo,
+      branding: cfg.branding,
+      layout: mode === 'strip' ? cfg.booth.fourShotLayout || 'strip' : undefined
     };
   }
 
@@ -449,13 +501,20 @@
     const canvas = document.createElement('canvas');
     anim = { frames, seq, frameMs, player: Animate.player(canvas, frames, seq, frameMs) };
     composed = canvas;
-    const box = $('#reviewPic');
-    box.innerHTML = '';
-    box.appendChild(canvas);
+    showReviewCanvas(canvas);
   }
 
   async function encodeAnim() {
-    const { frames, seq, frameMs } = anim;
+    // Stickers are baked into a copy of every frame.
+    const frames = anim.frames.map((f) => {
+      if (!Stickers.count()) return f;
+      const c = document.createElement('canvas');
+      c.width = f.width;
+      c.height = f.height;
+      c.getContext('2d').drawImage(f, 0, 0);
+      return Stickers.bake(c);
+    });
+    const { seq, frameMs } = anim;
     const asVideo = mode === 'boomerang' && cfg.animation.boomerangFormat !== 'gif' && Animate.videoMime();
     if (asVideo) return Animate.encodeVideo(frames, seq, frameMs, cfg.animation.videoLoops || 2);
     return Animate.encodeGif(frames, seq, frameMs);
@@ -474,23 +533,36 @@
     const btn = $('#acceptBtn');
     const label = btn.textContent;
     try {
-      let blob;
+      let blob, final = null;
       if (isAnim()) {
         btn.disabled = true;
         btn.textContent = mode === 'boomerang' ? '⏳ Making your boomerang…' : '⏳ Making your GIF…';
         blob = await encodeAnim();
       } else {
-        blob = await Compose.toJpeg(composed, cfg.booth.jpegQuality);
+        final = Stickers.bake(copyCanvas(composed));
+        blob = await Compose.toJpeg(final, cfg.booth.jpegQuality);
       }
+      // Strips print two-up on a 4x6 sheet; that sheet is uploaded right after the photo.
+      const sheet = final && mode === 'strip' && (cfg.booth.fourShotLayout || 'strip') === 'strip' && cfg.print.enabled ? Compose.stripSheet(final) : null;
       const q = new URLSearchParams({
         greeting: $('#greeting').value.trim(),
         guest: $('#guest').value.trim(),
         camera,
         mode,
+        print: sheet ? '0' : '1',
         raw: shots.map((s) => s.raw).filter(Boolean).map((r) => r.split('/').pop()).join(',')
       });
       current = await api('/api/photos?' + q, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
+      if (sheet) {
+        await api(`/api/photos/${current.id}/printfile`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: await Compose.toJpeg(sheet, 0.92) });
+        if (cfg.print.auto) {
+          try {
+            await api(`/api/photos/${current.id}/print`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ copies: cfg.print.autoCopies || 1 }) });
+          } catch (e) { current.printError = e.message; }
+        }
+      }
       stopAnim();
+      Stickers.clear();
       const isVideo = current.kind === 'video';
       $('#finalImg').classList.toggle('hidden', isVideo);
       $('#finalVid').classList.toggle('hidden', !isVideo);
@@ -512,6 +584,14 @@
       btn.disabled = false;
       btn.textContent = label;
     }
+  }
+
+  function copyCanvas(src) {
+    const c = document.createElement('canvas');
+    c.width = src.width;
+    c.height = src.height;
+    c.getContext('2d').drawImage(src, 0, 0);
+    return c;
   }
 
   // ---------------- share ----------------
@@ -642,6 +722,9 @@
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen().catch(() => {});
   };
+  $('#beautyBtn').onclick = () => { beautyOn = !beautyOn; $('#beautyBtn').classList.toggle('sel', beautyOn); redraw(); resetIdle(); };
+  $$('#stickerTools [data-st]').forEach((b) => (b.onclick = () => { Stickers.adjust(b.dataset.st); stickerTools(); resetIdle(); }));
+  window.addEventListener('resize', () => Stickers.sync());
   $('#retakeBtn').onclick = () => { if (!busy) startSession(); };
   $('#acceptBtn').onclick = accept;
   $('#doneBtn').onclick = home;
@@ -676,6 +759,7 @@
   // Canvas only uses a web font once it is loaded.
   try { await Promise.all(["40px 'Great Vibes'", "40px 'Playfair Display'", "italic 40px 'Playfair Display'"].map((f) => document.fonts.load(f))); } catch {}
   await init();
+  Sound.startMusic();
   wake();
   connectEvents();
   show('attract');

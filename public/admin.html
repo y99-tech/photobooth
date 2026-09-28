@@ -58,6 +58,11 @@
     </div>
 
     <div class="card">
+      <h2 style="margin-top:0">🎨 Logo, music &amp; mosaic picture</h2>
+      <div id="assets"></div>
+    </div>
+
+    <div class="card">
       <h2 style="margin-top:0">🟩 Green screen backgrounds</h2>
       <p class="muted">Turn it on in the <b>Green screen</b> tab. Put a green (or blue) backdrop behind guests, light it evenly, and keep guests a step or two in front of it. Upload your own backgrounds (JPEG/PNG, landscape 3:2 or 16:9) — 4 built-in ones are always available.</p>
       <div class="row" style="justify-content:flex-start">
@@ -105,6 +110,7 @@
     'greenScreen.similarity': '0.3–0.6 · raise if green is left, lower if people turn see-through',
     'greenScreen.smoothness': '0.05–0.3 · softer edges', 'greenScreen.spill': '0.1–0.6 · removes green tint on skin',
     'greenScreen.defaultBackground': 'builtin:gold · builtin:blush · builtin:night · builtin:ivory · or an uploaded file name',
+    'booth.fourShotLayout': 'strip (classic 2x6) | grid (2x2)', 'branding.logoPosition': 'top-left · top-right · bottom-left · bottom-right · bottom-center',
     'booth.triggerKeys': 'one key per line (Bluetooth shutter / clicker keys)', 'share.wedding.urlPath': 'dot path to the photo URL in the JSON reply, e.g. data.url',
     publicBaseUrl: 'empty = auto (http://LAN-IP:port)', caption: 'placeholders: {greeting} {guest} {title} {hashtag} {url} {date}'
   };
@@ -177,6 +183,7 @@
     ['Camera', ['dslr']],
     ['GIF & Boomerang', ['animation', 'video']],
     ['Green screen', ['greenScreen']],
+    ['Branding & sound', ['branding', 'sound']],
     ['Printing', ['print']],
     ['Sharing', ['share']]
   ];
@@ -247,6 +254,7 @@
         <a class="btn ghost" href="/" target="_blank">Open booth</a>
         <a class="btn ghost" href="/gallery?slideshow=1" target="_blank">Slideshow (2nd screen)</a>
       </div>`;
+    assets(s.assets || {});
     $('#ovPrev').classList.toggle('hidden', !s.overlay);
     if (s.overlay) $('#ovPrev').src = '/overlay.png?' + Date.now();
   }
@@ -279,6 +287,32 @@
     } catch (e) {
       $('#printers').textContent = '⚠️ ' + e.message;
     }
+  }
+
+  const ASSET_INFO = {
+    logo: ['Logo watermark', 'Transparent PNG — stamped on every photo, GIF and video (position & size in Branding & sound).', 'image/png,image/jpeg'],
+    music: ['Background music', 'MP3 / M4A — loops softly on the start screen when sound → music is on.', 'audio/mpeg,audio/mp4,.mp3,.m4a'],
+    mosaic: ['Mosaic picture', 'JPEG / PNG of the couple — the live mosaic wall (/mosaic) builds this picture out of guests\' photos.', 'image/jpeg,image/png']
+  };
+  function assets(have) {
+    $('#assets').innerHTML = Object.entries(ASSET_INFO).map(([k, [name, help, accept]]) => `
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:10px 0">
+        <b style="min-width:170px">${name}</b>
+        <span class="pill ${have[k] ? 'done' : ''}">${have[k] ? 'uploaded' : 'none'}</span>
+        ${have[k] && k !== 'music' ? `<img src="/asset/${k}?${Date.now()}" style="height:44px;border-radius:6px;background:#333">` : ''}
+        ${have[k] && k === 'music' ? `<audio controls src="/asset/music?${Date.now()}" style="height:36px"></audio>` : ''}
+        <input type="file" accept="${accept}" data-asset="${k}">
+        ${have[k] ? `<button class="btn ghost" data-del-asset="${k}">Remove</button>` : ''}
+        <div class="muted" style="width:100%;font-size:14px">${help}</div>
+      </div>`).join('');
+    document.querySelectorAll('[data-asset]').forEach((inp) => (inp.onchange = async () => {
+      const f = inp.files[0];
+      if (!f) return;
+      try { await api('/api/admin/asset/' + inp.dataset.asset, { method: 'POST', headers: { 'Content-Type': f.type || 'application/octet-stream' }, body: f }); }
+      catch (e) { alert(e.message); }
+      sys();
+    }));
+    document.querySelectorAll('[data-del-asset]').forEach((b) => (b.onclick = async () => { await api('/api/admin/asset/' + b.dataset.delAsset, { method: 'DELETE' }); sys(); }));
   }
 
   async function bgs(list) {

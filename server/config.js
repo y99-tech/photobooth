@@ -39,10 +39,30 @@ const DEFAULTS = {
     idleSeconds: 90,
     allowGuestGreeting: true,
     allowEmail: true,
+    fourShotLayout: 'strip', // 4-shot look: "strip" (classic 2x6 photobooth strip) | "grid" (2x2)
+    beauty: true, // soft skin + auto brightness (guests can switch it off on the review screen)
+    beautySmoothing: 0.6, // 0–1 skin smoothing strength
+    stickers: true, // guests can add props & stickers on the review screen
     // Phone remote control over Wi-Fi (open /remote on the phone). Empty = use adminPin.
     remotePin: '',
     // Keys that trigger a shot: Bluetooth shutter buttons / presenter clickers / USB arcade buttons.
     triggerKeys: ['Enter', ' ', 'AudioVolumeUp', 'AudioVolumeDown', 'PageDown', 'PageUp', 'ArrowRight', 'F5', 'b']
+  },
+
+  branding: {
+    // Upload a transparent PNG logo in Admin → it is stamped on every photo, GIF and video.
+    logoPosition: 'bottom-right', // top-left | top-right | bottom-left | bottom-right | bottom-center
+    logoSize: 0.14, // fraction of the long edge
+    logoOpacity: 0.9
+  },
+
+  sound: {
+    enabled: true,
+    voice: true, // spoken "3, 2, 1" (uses the computer's voices; falls back to beeps)
+    beeps: true,
+    shutter: true, // camera click sound
+    music: false, // loop uploaded background music on the start screen
+    musicVolume: 0.25
   },
 
   greenScreen: {
@@ -212,7 +232,7 @@ function publicView() {
   );
   return { event: c.event, booth: { ...c.booth, remotePin: undefined }, weddingName: c.share.wedding.name, dslr: { livePreview: c.dslr.livePreview }, share: enabled,
     print: { enabled: !!c.print.enabled, auto: !!c.print.auto, maxCopies: c.print.maxCopies },
-    animation: c.animation, greenScreen: c.greenScreen };
+    animation: c.animation, greenScreen: c.greenScreen, branding: c.branding, sound: c.sound };
 }
 
 module.exports = { load, get, save, publicView, DEFAULTS, ROOT, CONFIG_PATH };
