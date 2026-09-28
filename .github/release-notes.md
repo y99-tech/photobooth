@@ -29,3 +29,6 @@ Photos and settings are saved in **Documents\Photobooth**.
 1. Open **Admin**: `Ctrl+Shift+A` on Windows, or `http://localhost:8080/admin`. The PIN is **1234**. **Change it.**
 2. Set the couple's names and greetings, then turn on the sharing and printing you want. Press **Save & test** for each service.
 3. On your phone, scan the **Phone remote** QR code in Admin to control the booth.
+
+---
+☕ **Enjoying Photobooth?** [Buy me a coffee via PayPal](https://www.paypal.com/donate/?business=mohamed2000youssry%40gmail.com&item_name=Buy+me+a+coffee+-+Photobooth&currency_code=USD). Thank you! ❤️

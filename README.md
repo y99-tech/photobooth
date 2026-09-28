@@ -21,6 +21,8 @@ A light but powerful photobooth for weddings and events.
 - **Reliable:** every upload is queued on disk and retried, so photos survive a flaky venue Wi-Fi or a reboot
 - **Light:** 5 small npm dependencies, no build step, no database and no native modules. It runs on a Pi 3B+ and up.
 
+**Enjoying the photobooth?** [☕ Buy me a coffee via PayPal](https://www.paypal.com/donate/?business=mohamed2000youssry%40gmail.com&item_name=Buy+me+a+coffee+-+Photobooth&currency_code=USD). It keeps the project going. Thank you!
+
 | Screen | URL |
 |---|---|
 | Booth (kiosk) | `http://localhost:8080/` |
@@ -243,3 +245,7 @@ Environment variables:
 - Change the admin PIN, and set a separate `booth.remotePin` for the phone remote.
 - Keep the booth on a private or event Wi-Fi network. Guest photo links use random IDs.
 - API tokens stay on the booth, in `config.json`. They are never sent to the kiosk or to guests' browsers.
+
+## ☕ Support
+
+If this photobooth made your event better, you can [**buy me a coffee via PayPal**](https://www.paypal.com/donate/?business=mohamed2000youssry%40gmail.com&item_name=Buy+me+a+coffee+-+Photobooth&currency_code=USD) (mohamed2000youssry@gmail.com). Thank you! ❤️

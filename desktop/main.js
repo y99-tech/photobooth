@@ -10,6 +10,7 @@ const APP_ROOT = app.isPackaged ? path.join(__dirname, 'booth') : path.join(__di
 // Photos and settings go to Documents\Photobooth so they are easy to find and back up.
 const DATA = path.join(app.getPath('documents'), 'Photobooth');
 const ICON = path.join(__dirname, 'assets', 'icon.png');
+const COFFEE = 'https://www.paypal.com/donate/?business=mohamed2000youssry%40gmail.com&item_name=Buy+me+a+coffee+-+Photobooth&currency_code=USD';
 
 let win = null;
 let tray = null;
@@ -106,6 +107,8 @@ function createTray() {
         { label: 'Admin & settings   Ctrl+Shift+A', click: openAdmin },
         { label: 'Gallery slideshow (2nd screen)', click: () => shell.openExternal(booth.url + 'gallery?slideshow=1') },
         { label: 'Open photos folder', click: () => shell.openPath(path.join(DATA, 'photos')) },
+        { type: 'separator' },
+        { label: '☕ Buy me a coffee (PayPal)', click: () => shell.openExternal(COFFEE) },
         { type: 'separator' },
         {
           label: 'Start with Windows',
