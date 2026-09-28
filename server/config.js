@@ -39,6 +39,8 @@ const DEFAULTS = {
     idleSeconds: 90,
     allowGuestGreeting: true,
     allowEmail: true,
+    language: 'en', // booth's main language: en | ar | fr | es
+    languages: ['en'], // languages guests can switch to on the start screen, e.g. ["en", "ar"]
     fourShotLayout: 'strip', // 4-shot look: "strip" (classic 2x6 photobooth strip) | "grid" (2x2)
     beauty: true, // soft skin + auto brightness (guests can switch it off on the review screen)
     beautySmoothing: 0.6, // 0–1 skin smoothing strength
@@ -67,6 +69,7 @@ const DEFAULTS = {
 
   greenScreen: {
     enabled: false,
+    method: 'chroma', // "chroma" (green/blue screen) | "ai" (no backdrop needed — AI finds the people)
     keyColor: 'auto', // "auto" (sampled from the top corners) or a colour like "#00b140" (green) / "#0047bb" (blue)
     similarity: 0.4, // 0–1: how much of the screen colour is removed (raise if green is left behind)
     smoothness: 0.1, // 0–1: soft edge width (raise for smoother hair edges)
@@ -74,6 +77,17 @@ const DEFAULTS = {
     defaultBackground: 'builtin:gold', // a built-in id or an uploaded background id
     allowGuestChoice: true, // guests pick the background on the review screen
     livePreview: true // show the replaced background live while posing
+  },
+
+  handsFree: {
+    enabled: false, // camera watches for gestures (offline AI) — no buttons needed
+    peace: true, // ✌️ peace sign starts a photo
+    thumbsUp: true, // 👍 accepts the photo / finishes
+    smile: false, // 😁 a big smile starts a photo
+    clap: false, // 👏 a clap (microphone) starts / accepts / finishes
+    holdMs: 800, // how long a gesture must be held
+    smileThreshold: 0.6,
+    clapSensitivity: 0.5
   },
 
   animation: {
@@ -232,7 +246,7 @@ function publicView() {
   );
   return { event: c.event, booth: { ...c.booth, remotePin: undefined }, weddingName: c.share.wedding.name, dslr: { livePreview: c.dslr.livePreview }, share: enabled,
     print: { enabled: !!c.print.enabled, auto: !!c.print.auto, maxCopies: c.print.maxCopies },
-    animation: c.animation, greenScreen: c.greenScreen, branding: c.branding, sound: c.sound };
+    animation: c.animation, greenScreen: c.greenScreen, branding: c.branding, sound: c.sound, handsFree: c.handsFree };
 }
 
 module.exports = { load, get, save, publicView, DEFAULTS, ROOT, CONFIG_PATH };

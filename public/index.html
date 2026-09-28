@@ -16,13 +16,14 @@
 
   <!-- 1. Attract / start -->
   <section id="attract" class="screen">
+    <div id="langRow" class="row"></div>
     <h1 class="serif" id="evTitle">Photobooth</h1>
     <h2 id="evSub"></h2>
-    <div class="tap">TAP TO<br>START</div>
+    <div class="tap" data-i18n-html="tapToStart">TAP TO<br>START</div>
     <div class="row" style="margin-top:calc(var(--u)*2.5)" id="modeRow"></div>
     <div class="corner left">
       <div class="qr-mini"><img src="/api/qr.svg?to=/gallery" alt=""></div>
-      <div class="hint">Scan on the venue Wi-Fi to see &amp; download all photos</div>
+      <div class="hint" data-i18n="galleryHint">Scan on the venue Wi-Fi to see &amp; download all photos</div>
     </div>
     <div class="corner right">
       <span class="muted" id="camLabel"></span>
@@ -35,7 +36,7 @@
     <video id="video" autoplay playsinline muted class="hidden"></video>
     <img id="dslrLive" class="lv hidden" alt="">
     <canvas id="keyLive" class="lv hidden"></canvas>
-    <div id="noLive" class="live-msg hidden">👀 Look at the camera!</div>
+    <div id="noLive" class="live-msg hidden" data-i18n="lookAtCamera">👀 Look at the camera!</div>
     <div id="shotinfo"></div>
     <div id="countdown"></div>
   </section>
@@ -46,14 +47,14 @@
       <div class="pic" id="reviewPic"><div id="stickerLayer"></div></div>
       <div class="side">
         <div id="bgBox" class="hidden">
-          <h3>Background 🌄</h3>
+          <h3 data-i18n="background">Background 🌄</h3>
           <div class="bgs" id="bgChips"></div>
         </div>
-        <h3>Frame</h3>
+        <h3 data-i18n="frame">Frame</h3>
         <div class="chips" id="tplChips"></div>
-        <div class="chips" style="margin-top:.5em"><button class="chip" id="beautyBtn">✨ Beauty</button></div>
+        <div class="chips" style="margin-top:.5em"><button class="chip" id="beautyBtn" data-i18n="beauty">✨ Beauty</button></div>
         <div id="stickerBox">
-          <h3>Stickers 🎉</h3>
+          <h3 data-i18n="stickers">Stickers 🎉</h3>
           <div class="stickers" id="stickerPicks"></div>
           <div class="row hidden" id="stickerTools" style="justify-content:flex-start;margin-top:.4em">
             <button class="chip" data-st="smaller">➖</button>
@@ -63,14 +64,14 @@
           </div>
         </div>
         <div id="greetBox">
-          <h3>Add a greeting 💌</h3>
+          <h3 data-i18n="addGreeting">Add a greeting 💌</h3>
           <div class="chips" id="greetChips" style="margin:.5em 0"></div>
-          <textarea id="greeting" class="field osk" inputmode="none" maxlength="160" placeholder="…or write your own wishes"></textarea>
-          <input id="guest" class="field osk" inputmode="none" maxlength="40" placeholder="Your name(s)" style="margin-top:.5em">
+          <textarea id="greeting" class="field osk" inputmode="none" maxlength="160" placeholder="…or write your own wishes" data-i18n-ph="greetingPh"></textarea>
+          <input id="guest" class="field osk" inputmode="none" maxlength="40"  placeholder="Your name(s)" data-i18n-ph="namePh" style="margin-top:.5em">
         </div>
         <div class="row" style="margin-top:.6em">
-          <button class="btn" id="retakeBtn">↺ Retake</button>
-          <button class="btn primary" id="acceptBtn">Looks great ✓</button>
+          <button class="btn" id="retakeBtn" data-i18n="retake">↺ Retake</button>
+          <button class="btn primary" id="acceptBtn" data-i18n="accept">Looks great ✓</button>
         </div>
       </div>
     </div>
@@ -81,11 +82,11 @@
     <div class="split">
       <div class="pic"><img id="finalImg" alt=""><video id="finalVid" class="hidden" autoplay loop muted playsinline></video></div>
       <div class="side" style="text-align:center">
-        <h3>Scan to download 📲</h3>
+        <h3 data-i18n="scanToDownload">Scan to download 📲</h3>
         <div class="qr-big"><img id="qrImg" alt=""></div>
-        <div class="muted" style="font-size:.8em">Connect to the venue Wi-Fi, then scan</div>
+        <div class="muted" style="font-size:.8em" data-i18n="connectWifi">Connect to the venue Wi-Fi, then scan</div>
         <div id="printBox">
-          <h3>Print it 🖨️</h3>
+          <h3 data-i18n="printIt">Print it 🖨️</h3>
           <div class="row" style="flex-wrap:nowrap">
             <div class="stepper" id="copiesBox">
               <button class="btn" id="copiesMinus" aria-label="Fewer copies">−</button>
@@ -97,31 +98,40 @@
           <div id="printMsg" class="muted" style="font-size:.85em;min-height:1.2em;margin-top:.3em"></div>
         </div>
         <div id="emailBox">
-          <h3>Or email it to me</h3>
+          <h3 data-i18n="emailIt">Or email it to me</h3>
           <div class="row" style="flex-wrap:nowrap">
             <input id="email" type="email" class="field osk" inputmode="none" placeholder="you@email.com" maxlength="120">
-            <button class="btn primary" id="emailBtn">Send</button>
+            <button class="btn primary" id="emailBtn" data-i18n="send">Send</button>
           </div>
         </div>
         <div id="socialBox">
-          <h3>Post it</h3>
+          <h3 data-i18n="postIt">Post it</h3>
           <div class="row" id="socialBtns"></div>
         </div>
         <div class="status" id="shareStatus" style="justify-content:center"></div>
-        <button class="btn primary" id="doneBtn" style="margin-top:.6em">Done ✓</button>
+        <button class="btn primary" id="doneBtn" style="margin-top:.6em" data-i18n="done">Done ✓</button>
       </div>
     </div>
   </section>
 
+  <!-- Hands-free: small live camera bubble so guests know they are seen -->
+  <div id="hfBox" class="hidden">
+    <video id="hfCam" autoplay playsinline muted class="hidden"></video>
+    <img id="hfDslr" class="hidden" alt="">
+    <div id="hfHint"></div>
+  </div>
+
   <div id="flash"></div>
   <div id="toast" class="toast hidden"></div>
 
+  <script src="/i18n.js"></script>
   <script src="/osk.js"></script>
   <script src="/compose.js"></script>
   <script src="/animate.js"></script>
   <script src="/chroma.js"></script>
   <script src="/stickers.js"></script>
   <script src="/sound.js"></script>
+  <script src="/ai.js"></script>
   <script src="/booth.js"></script>
 </body>
 </html>

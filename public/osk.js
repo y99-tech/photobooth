@@ -3,7 +3,8 @@
 (function () {
   const LAYOUTS = {
     abc: ['1234567890', 'qwertyuiop', 'asdfghjkl', 'zxcvbnm'],
-    sym: ['1234567890', '@#&*-_+=/()', '.,!?\'":;', '♥❤😊🎉💍']
+    sym: ['1234567890', '@#&*-_+=/()', '.,!?\'":;', '♥❤😊🎉💍'],
+    ar: ['1234567890', 'ضصثقفغعهخحج', 'شسيبلاتنمكط', 'ئءؤرىةوزظذد']
   };
   let target = null, shift = false, layout = 'abc';
   const el = document.createElement('div');
@@ -47,18 +48,25 @@
     });
     const last = document.createElement('div');
     last.className = 'krow';
-    last.appendChild(key(layout === 'abc' ? '?123' : 'ABC', 'wide', () => { layout = layout === 'abc' ? 'sym' : 'abc'; render(); }));
+    // Arabic booths get an extra "ع" layout; the key cycles through the available layouts.
+    const cycle = isArabic() && !isEmail ? ['ar', 'abc', 'sym'] : ['abc', 'sym'];
+    const next = cycle[(cycle.indexOf(layout) + 1) % cycle.length];
+    last.appendChild(key({ ar: 'ع', abc: 'ABC', sym: '?123' }[next], 'wide', () => { layout = next; render(); }));
     if (isEmail) {
       last.appendChild(key('@', '', () => insert('@')));
       last.appendChild(key('.com', 'wide', () => insert('.com')));
       last.appendChild(key('@gmail.com', 'wide', () => insert('@gmail.com')));
     } else {
-      last.appendChild(key(',', '', () => insert(',')));
+      last.appendChild(key(isArabic() ? '،' : ',', '', () => insert(isArabic() ? '، ' : ',')));
       last.appendChild(key('space', 'xwide', () => insert(' ')));
       last.appendChild(key('!', '', () => insert('!')));
     }
     last.appendChild(key('Done ✓', 'wide on', hide));
     el.appendChild(last);
+  }
+
+  function isArabic() {
+    return document.documentElement.lang === 'ar';
   }
 
   function backspace() {
@@ -73,8 +81,8 @@
 
   function show(input) {
     target = input;
-    shift = input.value.length === 0 && input.type !== 'email';
-    layout = 'abc';
+    layout = isArabic() && input.type !== 'email' ? 'ar' : 'abc';
+    shift = layout === 'abc' && input.value.length === 0 && input.type !== 'email';
     render();
     el.classList.remove('hidden');
     // Shrink the screen above the keyboard so the field being typed in stays visible.

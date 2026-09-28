@@ -3,3 +3,4 @@ data/
 config.json
 *.log
 desktop/dist/
+models/

@@ -1,6 +1,7 @@
 // Kiosk controller: attract → live/countdown → review (greeting) → share.
 (async function () {
   const $ = (s) => document.querySelector(s);
+  const t = (k, v) => I18n.t(k, v);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -24,18 +25,18 @@
   let liveKey = null;
 
   const MODES = {
-    single: '📷 Single',
-    strip: '🎞️ 4-shot',
-    gif: '✨ GIF',
-    boomerang: '🔁 Boomerang'
+    single: () => t('single'),
+    strip: () => t('strip'),
+    gif: () => t('gif'),
+    boomerang: () => t('boomerang')
   };
   const isAnim = (m = mode) => m === 'gif' || m === 'boomerang';
 
   const TEMPLATES = [
-    ['elegant', 'Elegant'],
-    ['polaroid', 'Polaroid'],
-    ['minimal', 'Minimal'],
-    ['none', 'No frame']
+    ['elegant', () => t('elegant')],
+    ['polaroid', () => t('polaroid')],
+    ['minimal', () => t('minimal')],
+    ['none', () => t('none')]
   ];
   const SOCIAL = { facebook: 'Facebook', instagram: 'Instagram', telegram: 'Telegram' };
 
@@ -64,6 +65,11 @@
     $('#evSub').textContent = [cfg.event.subtitle, cfg.event.date].filter(Boolean).join(' · ');
     const modes = (cfg.booth.modes || Object.keys(MODES)).filter((m) => MODES[m]);
     cfg.booth.modes = modes.length ? modes : ['single'];
+    const langs = (cfg.booth.languages || []).filter((l) => I18n.LANGS.includes(l));
+    if (!langs.includes(cfg.booth.language || 'en')) langs.unshift(cfg.booth.language || 'en');
+    cfg.booth.languages = langs;
+    setLang(langs.includes(I18n.get()) && langInit ? I18n.get() : cfg.booth.language || 'en', true);
+    langInit = true;
     mode = cfg.booth.modes.includes(mode) ? mode : cfg.booth.modes.includes(cfg.booth.mode) ? cfg.booth.mode : cfg.booth.modes[0];
     template = template || cfg.booth.template;
 
@@ -176,7 +182,9 @@
     const tag = [bgOn ? bgId : '-', beautyOn, longEdge].join('|');
     if (shot.cache && shot.cache.tag === tag) return shot.cache.canvas;
     let img = fit(shot.img, longEdge);
-    if (bgOn) {
+    if (bgOn && aiBg()) {
+      if (shot.mask) img = AI.composite(img, shot.mask, currentBg());
+    } else if (bgOn) {
       ensureKey(shot.img);
       img = Chroma.key(img, currentBg(), gsCfg(), longEdge);
     }
@@ -205,17 +213,35 @@
     Stickers.attach($('#stickerLayer'), composed, stickerTools);
   }
 
+  // Background removal by AI (no backdrop needed) instead of chroma key.
+  const aiBg = () => cfg.greenScreen.method === 'ai';
+
+  // Person masks for every captured shot / frame (once; switching backgrounds is then instant).
+  async function prepareMasks() {
+    if (!gsOn() || !aiBg() || !currentBg()) return;
+    $('#shotinfo').textContent = '✨ ' + t('removingBg');
+    try {
+      for (const s of shots) if (!s.mask) s.mask = await AI.personMask(s.img);
+    } catch (e) {
+      console.warn('AI background removal unavailable', e);
+      toast('⚠️ ' + t('aiUnavailable'), 4000);
+    }
+    $('#shotinfo').textContent = '';
+  }
+
   async function startLiveKey(src, flipX) {
     stopLiveKey();
     if (!gsOn() || !cfg.greenScreen.livePreview || !currentBg()) return;
     const ready = () => (src.videoWidth || src.naturalWidth) > 0;
     for (let i = 0; i < 50 && !ready(); i++) await sleep(100);
     if (!ready()) return;
-    if (cfg.greenScreen.keyColor === 'auto') {
+    if (aiBg()) {
+      liveKey = AI.live($('#keyLive'), src, currentBg, { flipX });
+    } else if (cfg.greenScreen.keyColor === 'auto') {
       // Sample the backdrop from an un-mirrored copy of the first frame.
       keyRgb = Chroma.sampleKey(src);
     }
-    liveKey = Chroma.live($('#keyLive'), src, currentBg, gsCfg(), { flipX });
+    if (!aiBg()) liveKey = Chroma.live($('#keyLive'), src, currentBg, gsCfg(), { flipX });
     $('#keyLive').classList.remove('hidden');
     $('#video').classList.add('hidden');
     $('#dslrLive').classList.add('hidden');
@@ -227,11 +253,37 @@
     $('#keyLive').classList.add('hidden');
   }
 
+  // ---------------- languages ----------------
+  let langInit = false;
+  function setLang(l, quiet) {
+    I18n.set(l);
+    Sound.setup(cfg.sound, I18n.get());
+    const box = $('#langRow');
+    box.innerHTML = cfg.booth.languages.length > 1
+      ? cfg.booth.languages.map((x) => `<button class="btn ghost${x === I18n.get() ? ' sel' : ''}" data-lang="${x}">${I18n.NAMES[x] || x}</button>`).join('')
+      : '';
+    if (quiet) return;
+    renderModes();
+    renderTemplates();
+    renderGreetings();
+    report();
+  }
+
+  // Greetings: the host's own list in the booth's main language, translations for the others.
+  function greetingList() {
+    const l = I18n.get();
+    const own = cfg.event.greetingsByLang && cfg.event.greetingsByLang[l];
+    if (own && own.length) return own;
+    // The host's list is used unless it is still the untouched English default.
+    const custom = JSON.stringify(cfg.event.greetings || []) !== JSON.stringify(I18n.defaultGreetings());
+    return l === (cfg.booth.language || 'en') && (custom || l === 'en') ? cfg.event.greetings || [] : t('greetings');
+  }
+
   function renderModes() {
     const row = $('#modeRow');
     row.classList.toggle('hidden', cfg.booth.modes.length < 2);
     row.innerHTML = cfg.booth.modes
-      .map((m) => `<button class="btn ghost${m === mode ? ' sel' : ''}" data-mode="${m}">${MODES[m]}</button>`)
+      .map((m) => `<button class="btn ghost${m === mode ? ' sel' : ''}" data-mode="${m}">${MODES[m]()}</button>`)
       .join('');
   }
 
@@ -248,7 +300,7 @@
     for (const [k, label] of TEMPLATES) {
       const b = document.createElement('button');
       b.className = 'chip' + (k === template ? ' sel' : '');
-      b.textContent = label;
+      b.textContent = label();
       b.onclick = () => { template = k; renderTemplates(); redraw(); report(); };
       box.appendChild(b);
     }
@@ -257,7 +309,7 @@
   function renderGreetings() {
     const box = $('#greetChips');
     box.innerHTML = '';
-    for (const g of cfg.event.greetings || []) {
+    for (const g of greetingList()) {
       const b = document.createElement('button');
       b.className = 'chip';
       b.textContent = g;
@@ -274,6 +326,7 @@
   // ---------------- screens ----------------
   function show(name) {
     screen = name;
+    document.body.dataset.screen = name;
     for (const s of ['attract', 'live', 'review', 'shareScr']) $('#' + s).classList.toggle('hidden', s !== name);
     if (window.OSK) OSK.hide();
     resetIdle();
@@ -309,13 +362,13 @@
     stopLiveKey();
     keyRgb = null;
     if (gsOn()) { resetBackground(); renderBackgrounds(); }
-    stopWebcam();
-    stopDslrLive();
+    if (!keepCamera()) { stopWebcam(); stopDslrLive(); }
     shots = [];
     composed = null;
     current = null;
     Stickers.clear();
     beautyOn = cfg.booth.beauty !== false;
+    if (I18n.get() !== (cfg.booth.language || 'en')) setLang(cfg.booth.language || 'en'); // next guest starts in the main language
     Sound.startMusic();
     $('#greeting').value = '';
     $('#guest').value = '';
@@ -385,7 +438,7 @@
       if (mode === 'boomerang') await shootBoomerang(useWebcam);
       const total = mode === 'strip' ? 4 : mode === 'gif' ? cfg.animation.gifFrames || 4 : mode === 'boomerang' ? 0 : 1;
       for (let i = 0; i < total; i++) {
-        $('#shotinfo').textContent = total > 1 ? `${mode === 'gif' ? 'Pose' : 'Photo'} ${i + 1} of ${total}` : '';
+        $('#shotinfo').textContent = total > 1 ? t(mode === 'gif' ? 'poseOf' : 'photoOf', { i: i + 1, n: total }) : '';
         const between = mode === 'gif' ? 1 : 3; // GIF frames come quickly, like a flipbook
         await countdown(i === 0 ? cfg.booth.countdown : Math.min(between, cfg.booth.countdown));
         flash();
@@ -393,8 +446,8 @@
         if (!useWebcam && i < total - 1) startDslrLive();
       }
       stopLiveKey();
-      stopDslrLive();
-      stopWebcam();
+      if (!keepCamera()) { stopDslrLive(); stopWebcam(); }
+      await prepareMasks();
       busy = false;
       openReview();
     } catch (e) {
@@ -414,9 +467,9 @@
     const src = useWebcam ? $('#video') : $('#dslrLive');
     if (!useWebcam && !cfg.dslr.livePreview) throw new Error('Boomerang needs DSLR live view (or use the webcam)');
     if (!useWebcam) await waitForFrame(src);
-    $('#shotinfo').textContent = '🔁 Boomerang — get ready to move!';
+    $('#shotinfo').textContent = t('boomReady');
     await countdown(cfg.booth.countdown);
-    $('#shotinfo').textContent = '🔴 Move! Wave, jump, cheers!';
+    $('#shotinfo').textContent = t('boomMove');
     const frames = await Animate.burst(src, {
       seconds: cfg.animation.boomerangSeconds || 1.5,
       fps: cfg.animation.boomerangFps || 15,
@@ -536,7 +589,7 @@
       let blob, final = null;
       if (isAnim()) {
         btn.disabled = true;
-        btn.textContent = mode === 'boomerang' ? '⏳ Making your boomerang…' : '⏳ Making your GIF…';
+        btn.textContent = t(mode === 'boomerang' ? 'makingBoomerang' : 'makingGif');
         blob = await encodeAnim();
       } else {
         final = Stickers.bake(copyCanvas(composed));
@@ -574,11 +627,11 @@
       $$('#socialBtns .btn').forEach((b) => (b.disabled = false));
       setCopies(1);
       $('#printBtn').disabled = false;
-      $('#printBtn').textContent = cfg.print.auto ? '🖨️ Print another' : '🖨️ Print';
-      $('#printMsg').textContent = current.printError ? '⚠️ ' + current.printError : cfg.print.auto && cfg.print.enabled ? '🖨️ Printing your photo…' : '';
+      $('#printBtn').textContent = t(cfg.print.auto ? 'printAnother' : 'print');
+      $('#printMsg').textContent = current.printError ? '⚠️ ' + current.printError : cfg.print.auto && cfg.print.enabled ? t('printing', { n: '' }) : '';
       show('shareScr');
     } catch (e) {
-      toast('⚠️ Could not save: ' + e.message, 5000);
+      toast(t('couldNotSave') + e.message, 5000);
     } finally {
       busy = false;
       btn.disabled = false;
@@ -610,7 +663,7 @@
     btn.disabled = true;
     try {
       await api(`/api/photos/${current.id}/share/${target}`, { method: 'POST' });
-      toast(`Posting to ${SOCIAL[target]}…`);
+      toast(t('postingTo', { x: SOCIAL[target] }));
     } catch (e) {
       btn.disabled = false;
       toast('⚠️ ' + e.message);
@@ -635,8 +688,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ copies })
       });
-      $('#printMsg').textContent = `🖨️ Printing ${r.copies} cop${r.copies > 1 ? 'ies' : 'y'}…` + (r.queued > 1 ? ` (${r.queued - 1} ahead of you)` : '');
-      setTimeout(() => { btn.disabled = false; btn.textContent = '🖨️ Print another'; }, 4000);
+      $('#printMsg').textContent = t('printing', { n: '×' + r.copies });
+      setTimeout(() => { btn.disabled = false; btn.textContent = t('printAnother'); }, 4000);
     } catch (e) {
       $('#printMsg').textContent = '⚠️ ' + e.message;
       btn.disabled = /maximum|out of paper/i.test(e.message);
@@ -647,10 +700,10 @@
   function onPrint({ job }) {
     if (!job || !current || job.photoId !== current.id || screen !== 'shareScr') return;
     const MSG = {
-      queued: '🖨️ Waiting for the printer…',
-      printing: '🖨️ Printing… collect your photo at the printer',
-      done: '✅ Sent to the printer — collect it in a moment!',
-      failed: '⚠️ Print failed: ' + job.error
+      queued: t('waitingPrinter'),
+      printing: t('printingCollect'),
+      done: t('printSent'),
+      failed: t('printFailed') + job.error
     };
     $('#printMsg').textContent = MSG[job.status] || '';
     if (job.status === 'failed') $('#printBtn').disabled = false;
@@ -667,11 +720,55 @@
       });
       $('#email').value = '';
       if (window.OSK) OSK.hide();
-      toast('📧 On its way to ' + to);
+      toast(t('emailSent', { to }));
     } catch (e) {
       toast('⚠️ ' + e.message);
     }
     resetIdle();
+  }
+
+  // ---------------- hands-free (✌️ / 😁 / 👏 to shoot, 👍 to accept) ----------------
+  const keepCamera = () => !!(cfg.handsFree && cfg.handsFree.enabled);
+  let hfWatch = null, hfClap = null;
+
+  async function startHandsFree() {
+    stopHandsFree();
+    if (!keepCamera()) return;
+    const h = cfg.handsFree;
+    const box = $('#hfBox');
+    let src;
+    try {
+      if (camera === 'webcam') {
+        await startWebcam();
+        src = $('#hfCam');
+        src.srcObject = stream;
+        src.play().catch(() => {});
+      } else if (cfg.dslr.livePreview) {
+        src = $('#hfDslr');
+        src.src = '/api/dslr/preview?hf=' + Date.now();
+      }
+    } catch (e) { console.warn('hands-free camera', e); }
+    $('#hfCam').classList.toggle('hidden', !src || src.id !== 'hfCam');
+    $('#hfDslr').classList.toggle('hidden', !src || src.id !== 'hfDslr');
+    const hints = [h.peace && '✌️', h.smile && '😁', h.clap && '👏'].filter(Boolean).join(' ');
+    $('#hfHint').textContent = hints ? t('handsFreeHint', { icons: hints }) : '';
+    box.classList.remove('hidden');
+    if (src) {
+      hfWatch = AI.watch(src, h, (kind) => {
+        if (busy) return;
+        if (screen === 'attract' && (kind === 'peace' || kind === 'smile')) startSession();
+        else if (screen === 'review' && kind === 'thumbsup') accept();
+        else if (screen === 'shareScr' && (kind === 'thumbsup' || kind === 'peace')) home();
+      });
+    }
+    if (h.clap) hfClap = await AI.clap(h.clapSensitivity, () => { if (!busy && screen !== 'live') primary(); });
+  }
+
+  function stopHandsFree() {
+    if (hfWatch) hfWatch.stop();
+    if (hfClap) hfClap.stop();
+    hfWatch = hfClap = null;
+    $('#hfBox').classList.add('hidden');
   }
 
   // ---------------- one-button flow (Bluetooth shutter / clicker / phone remote) ----------------
@@ -713,9 +810,11 @@
 
   // ---------------- wire up ----------------
   $('#attract').addEventListener('click', (e) => {
+    const lb = e.target.closest('[data-lang]');
+    if (lb) { setLang(lb.dataset.lang); return; }
     const m = e.target.closest('[data-mode]');
     if (m) { setMode(m.dataset.mode); return; }
-    if (e.target.closest('#fsBtn') || e.target.closest('.corner')) return;
+    if (e.target.closest('#fsBtn') || e.target.closest('.corner') || e.target.closest('#langRow')) return;
     startSession();
   });
   $('#fsBtn').onclick = () => {
@@ -757,9 +856,10 @@
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && wake());
 
   // Canvas only uses a web font once it is loaded.
-  try { await Promise.all(["40px 'Great Vibes'", "40px 'Playfair Display'", "italic 40px 'Playfair Display'"].map((f) => document.fonts.load(f))); } catch {}
+  try { await Promise.all(["40px 'Great Vibes'", "40px 'Playfair Display'", "italic 40px 'Playfair Display'", "40px 'Aref Ruqaa'", "40px 'Amiri'"].map((f) => document.fonts.load(f))); } catch {}
   await init();
   Sound.startMusic();
+  startHandsFree();
   wake();
   connectEvents();
   show('attract');

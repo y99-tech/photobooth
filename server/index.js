@@ -173,6 +173,17 @@ app.post('/api/dslr/capture', async (req, res) => {
   }
 });
 
+// Offline AI (MediaPipe): engine from node_modules, models from ./models (or data/models).
+const MP_DIR = path.dirname(require.resolve('@mediapipe/tasks-vision'));
+app.use('/vendor/mediapipe', express.static(MP_DIR, { maxAge: '7d' }));
+for (const dir of [path.join(config.ROOT, 'models'), path.join(store.DIRS.data, 'models')]) {
+  app.use('/models', express.static(dir, { maxAge: '7d' }));
+}
+app.get('/api/ai', (req, res) => {
+  const has = (f) => [path.join(config.ROOT, 'models', f), path.join(store.DIRS.data, 'models', f)].some((p) => fs.existsSync(p));
+  res.json({ segment: has('selfie_segmenter.tflite'), gesture: has('gesture_recognizer.task'), face: has('face_landmarker.task') });
+});
+
 // GIF encoder used by the kiosk (served from node_modules, works offline).
 app.get('/vendor/gifenc.esm.js', (req, res) =>
   res.type('text/javascript').sendFile(path.join(path.dirname(require.resolve('gifenc/package.json')), 'dist', 'gifenc.esm.js'))
