@@ -15,6 +15,8 @@
     #show .slide { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity 1.2s; }
     #show .slide.on { opacity: 1; }
     .grid video { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; display: block; }
+    .grid a { position: relative; display: block; }
+    .grid a .badge { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.6); border-radius: 99px; padding: 2px 8px; font-size: 13px; }
     #show .cap { position: absolute; bottom: 3vh; left: 3vw; right: 3vw; display: flex; justify-content: space-between; align-items: flex-end; color: #fff; }
     #show .qrs { background: #fff; padding: 8px; border-radius: 12px; width: 16vmin; }
     #show .qrs img { position: static; opacity: 1; width: 100%; height: auto; }
@@ -24,55 +26,80 @@
 <body>
   <div class="page" style="max-width:1200px">
     <h1 class="serif" id="title" style="text-align:center">Gallery</h1>
-    <p class="muted" style="text-align:center;margin-top:0">Tap a photo to download or share it · updates live</p>
+    <p class="muted" style="text-align:center;margin-top:0" data-i18n="galleryTap">Tap a photo to download or share it · updates live</p>
+    <div class="row hidden" id="upRow" style="margin-bottom:14px"><a class="btn primary" href="/upload" data-i18n="uploadTitle">Share your photos</a></div>
     <div class="grid" id="grid"></div>
-    <div class="row" style="margin-top:20px"><button class="btn ghost hidden" id="more">Load more</button></div>
+    <div class="row" style="margin-top:20px"><button class="btn ghost hidden" id="more" data-i18n="loadMore">Load more</button></div>
   </div>
   <div id="show">
     <div class="cap">
       <div><h1 class="serif" id="stitle" style="margin:0;font-size:5vmin;font-weight:500"></h1><div id="scount" style="font-size:2.4vmin;opacity:.8"></div></div>
-      <div style="text-align:center;font-size:2vmin"><div class="qrs"><img src="/api/qr.svg?to=/gallery" alt=""></div>Scan for all photos</div>
+      <div style="text-align:center;font-size:2vmin"><div class="qrs"><img src="/api/qr.svg?to=/gallery" alt=""></div><span data-i18n="scanAll">Scan for all photos</span></div>
     </div>
   </div>
+<script src="/i18n.js"></script>
 <script>
 (async function () {
   const $ = (s) => document.querySelector(s);
   const slideshow = new URLSearchParams(location.search).has('slideshow');
   if (slideshow) document.body.classList.add('slideshow');
   const cfg = await fetch('/api/config').then((r) => r.json());
+  I18n.set(slideshow ? cfg.booth.language || 'en' : I18n.pick(cfg.booth.languages, cfg.booth.language));
+  $('#upRow').classList.toggle('hidden', !cfg.guestUploads.enabled);
+  const count = () => ($('#scount').textContent = I18n.t('photos', { n: photos.length }));
   $('#title').textContent = $('#stitle').textContent = cfg.event.title;
   let photos = [];
   let offset = 0;
 
+  // Small previews keep the gallery fast on phones; the full file opens on tap.
   function tile(p) {
     const a = document.createElement('a');
     a.href = '/p/' + p.id;
+    a.dataset.id = p.id;
     a.innerHTML = p.kind === 'video'
-      ? `<video src="${p.url}" autoplay loop muted playsinline preload="metadata"></video>`
-      : `<img loading="lazy" src="${p.url}" alt="">`;
+      ? (p.thumb ? `<img loading="lazy" src="${p.thumb}" alt="">` : `<video src="${p.url}" muted playsinline preload="metadata"></video>`) + `<span class="badge">${p.mode === 'message' ? '🎥' : '🔁'}</span>`
+      : `<img loading="lazy" src="${p.thumb || p.url}" alt="">` + (p.kind === 'gif' ? '<span class="badge">GIF</span>' : '');
     return a;
   }
+  const visible = (p) => p && !p.hidden && !p.pending && (p.mode !== 'message');
 
   async function load() {
-    const list = await fetch(`/api/photos?limit=60&offset=${offset}`).then((r) => r.json());
+    const list = await fetch(`/api/photos?public=1&limit=60&offset=${offset}`).then((r) => r.json());
     offset += list.length;
     photos.push(...list);
     list.forEach((p) => $('#grid').appendChild(tile(p)));
     $('#more').classList.toggle('hidden', list.length < 60);
-    $('#scount').textContent = photos.length + ' photos';
+    count();
   }
   $('#more').onclick = load;
   await load();
 
   const es = new EventSource('/api/events');
   const seen = new Set(photos.map((p) => p.id));
+  function drop(id) {
+    photos = photos.filter((x) => x.id !== id);
+    seen.delete(id);
+    const el = document.querySelector(`#grid [data-id="${id}"]`);
+    if (el) el.remove();
+    count();
+  }
+  es.addEventListener('removed', (e) => drop(JSON.parse(e.data).id));
   es.addEventListener('photo', (e) => {
     const p = JSON.parse(e.data);
-    if (!p || seen.has(p.id)) return;
+    if (!p) return;
+    if (!visible(p)) return drop(p.id); // hidden / awaiting approval / private message
+    if (seen.has(p.id)) {
+      // e.g. the preview arrived: refresh the tile
+      const el = document.querySelector(`#grid [data-id="${p.id}"]`);
+      if (el) el.replaceWith(tile(p));
+      const i = photos.findIndex((x) => x.id === p.id);
+      if (i >= 0) photos[i] = p;
+      return;
+    }
     seen.add(p.id);
     photos.unshift(p);
     $('#grid').prepend(tile(p));
-    $('#scount').textContent = photos.length + ' photos';
+    count();
     if (slideshow) { idx = -1; next(); } // show new photo straight away
   });
 

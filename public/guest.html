@@ -12,23 +12,24 @@
 </head>
 <body>
   <div class="page">
-    <h1 class="serif" id="title" style="text-align:center">Your photo</h1>
+    <h1 class="serif" id="title" style="text-align:center" data-i18n="yourPhoto">Your photo</h1>
     <p class="muted" id="sub" style="text-align:center;margin-top:0"></p>
     <img id="photo" class="photo" alt="Photobooth photo">
     <p id="greet" class="serif" style="font-style:italic;text-align:center;font-size:20px"></p>
     <div class="row" style="margin:16px 0">
       <a class="btn primary" id="dl" download>⬇ Save photo</a>
-      <button class="btn" id="shareBtn">📤 Share…</button>
+      <button class="btn" id="shareBtn" data-i18n="share">📤 Share…</button>
     </div>
     <div class="row" id="links"></div>
     <p class="muted" id="hint" style="text-align:center;font-size:14px">
-      On iPhone: tap “Share…” → “Save Image”, or long-press the photo.
+      <span data-i18n="iphoneHint">On iPhone: tap “Share…” → “Save Image”, or long-press the photo.</span>
     </p>
     <div class="card">
-      <h3 style="margin-top:0">More photos</h3>
-      <a class="btn" href="/gallery">View the whole gallery →</a>
+      <h3 style="margin-top:0" data-i18n="morePhotos">More photos</h3>
+      <a class="btn" href="/gallery" data-i18n="viewGallery">View the whole gallery →</a>
     </div>
   </div>
+<script src="/i18n.js"></script>
 <script>
 (async function () {
   const $ = (s) => document.querySelector(s);
@@ -37,21 +38,25 @@
     fetch('/api/config').then((r) => r.json()),
     fetch('/api/photos/' + id).then((r) => (r.ok ? r.json() : null))
   ]);
+  I18n.set(I18n.pick(cfg.booth.languages, cfg.booth.language));
+  const t = I18n.t;
   $('#title').textContent = cfg.event.title;
   $('#sub').textContent = [cfg.event.subtitle, cfg.event.date, cfg.event.hashtag].filter(Boolean).join(' · ');
-  if (!p) { $('#photo').replaceWith(Object.assign(document.createElement('p'), { textContent: 'Photo not found.' })); return; }
+  if (!p) { $('#photo').replaceWith(Object.assign(document.createElement('p'), { textContent: t('notFound') })); return; }
   const ext = p.url.split('.').pop();
   const noun = p.kind === 'video' ? 'boomerang' : p.kind === 'gif' ? 'GIF' : 'photo';
   document.title = cfg.event.title + ' — ' + noun;
   if (p.kind === 'video') {
     const v = Object.assign(document.createElement('video'), { src: p.url, autoplay: true, loop: true, muted: true, playsInline: true, className: 'photo' });
     $('#photo').replaceWith(v);
-    $('#hint').textContent = 'On iPhone: tap “Share…” → “Save Video”.';
+    v.muted = p.mode !== 'message';
+    v.controls = p.mode === 'message';
+    $('#hint').textContent = t('iphoneVideo');
   } else {
     $('#photo').src = p.url;
   }
   $('#dl').href = p.url;
-  $('#dl').textContent = '⬇ Save ' + noun;
+  $('#dl').textContent = t(p.kind === 'video' ? 'saveVideo' : p.kind === 'gif' ? 'saveGif' : 'savePhoto');
   $('#dl').download = (cfg.event.title || 'photobooth').replace(/\W+/g, '-') + '-' + id + '.' + ext;
   if (p.greeting) $('#greet').textContent = '“' + p.greeting + '”' + (p.guest ? ' — ' + p.guest : '');
 

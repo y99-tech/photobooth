@@ -22,6 +22,8 @@
     <div class="tap" data-i18n-html="tapToStart">TAP TO<br>START</div>
     <div class="row" style="margin-top:calc(var(--u)*2.5)" id="modeRow"></div>
     <div class="corner left">
+      <div class="qr-mini hidden" id="uploadQr"><img src="/api/qr.svg?to=/upload" alt=""></div>
+      <div class="hint hidden" id="uploadHint" data-i18n="uploadHint">Add your own photos</div>
       <div class="qr-mini"><img src="/api/qr.svg?to=/gallery" alt=""></div>
       <div class="hint" data-i18n="galleryHint">Scan on the venue Wi-Fi to see &amp; download all photos</div>
     </div>
@@ -39,6 +41,7 @@
     <div id="noLive" class="live-msg hidden" data-i18n="lookAtCamera">👀 Look at the camera!</div>
     <div id="shotinfo"></div>
     <div id="countdown"></div>
+    <button class="btn primary hidden" id="msgStopBtn">Stop ■</button>
   </section>
 
   <!-- 3. Review + greeting -->
@@ -46,14 +49,14 @@
     <div class="split">
       <div class="pic" id="reviewPic"><div id="stickerLayer"></div></div>
       <div class="side">
-        <div id="bgBox" class="hidden">
+        <div id="bgBox" class="hidden photo-only">
           <h3 data-i18n="background">Background 🌄</h3>
           <div class="bgs" id="bgChips"></div>
         </div>
-        <h3 data-i18n="frame">Frame</h3>
-        <div class="chips" id="tplChips"></div>
-        <div class="chips" style="margin-top:.5em"><button class="chip" id="beautyBtn" data-i18n="beauty">✨ Beauty</button></div>
-        <div id="stickerBox">
+        <h3 data-i18n="frame" class="photo-only">Frame</h3>
+        <div class="chips photo-only" id="tplChips"></div>
+        <div class="chips photo-only" style="margin-top:.5em"><button class="chip" id="beautyBtn" data-i18n="beauty">✨ Beauty</button></div>
+        <div id="stickerBox" class="photo-only">
           <h3 data-i18n="stickers">Stickers 🎉</h3>
           <div class="stickers" id="stickerPicks"></div>
           <div class="row hidden" id="stickerTools" style="justify-content:flex-start;margin-top:.4em">

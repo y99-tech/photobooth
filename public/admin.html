@@ -88,6 +88,10 @@
 
     <div class="card">
       <h2 style="margin-top:0">📤 Recent photos &amp; uploads</h2>
+      <div class="row" style="justify-content:flex-start;margin-bottom:10px" id="pf">
+        <button class="btn sel" data-pf="">All</button><button class="btn" data-pf="booth">📷 Booth</button><button class="btn" data-pf="guest">📱 Guest uploads</button>
+        <button class="btn" data-pf="message">🎥 Video messages</button><button class="btn" data-pf="pending">⏳ Awaiting approval</button>
+      </div>
       <table id="photos"></table>
     </div>
   </div>
@@ -188,6 +192,7 @@
     ['Green screen', ['greenScreen']],
     ['Branding & sound', ['branding', 'sound']],
     ['Hands-free', ['handsFree']],
+    ['Guestbook, uploads & mosaic', ['guestbook', 'guestUploads', 'mosaic']],
     ['Printing', ['print']],
     ['Sharing', ['share']]
   ];
@@ -257,20 +262,31 @@
         <div style="text-align:center"><div class="qr-mini" style="width:120px;height:120px"><img src="/api/qr.svg?to=/gallery"></div><small>Gallery</small></div>
         <a class="btn ghost" href="/" target="_blank">Open booth</a>
         <a class="btn ghost" href="/gallery?slideshow=1" target="_blank">Slideshow (2nd screen)</a>
+        <a class="btn ghost" href="/mosaic" target="_blank">🧩 Mosaic wall</a>
+        <a class="btn ghost" href="/upload" target="_blank">📱 Guest upload page</a>
       </div>`;
     assets(s.assets || {});
     $('#ovPrev').classList.toggle('hidden', !s.overlay);
     if (s.overlay) $('#ovPrev').src = '/overlay.png?' + Date.now();
   }
 
+  const esc = (x) => String(x || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const KIND = (p) => p.mode === 'message' ? '🎥 message' : p.source === 'guest' ? '📱 guest upload' : p.kind === 'video' ? '🔁 boomerang' : p.kind === 'gif' ? '✨ GIF' : '📷 photo';
+  let photoFilter = '';
   async function photos() {
-    const list = await fetch('/api/photos?limit=30').then((r) => r.json());
-    $('#photos').innerHTML = list.map((p) => `
-      <tr><td><a href="/p/${p.id}" target="_blank">${p.kind === 'video' ? `<video src="${p.url}" muted autoplay loop playsinline style="width:70px;border-radius:6px;display:block"></video>` : `<img src="${p.url}">`}</a></td>
-      <td>${new Date(p.createdAt).toLocaleString()}<br><small class="muted">${p.guest || ''} ${p.greeting ? '“' + p.greeting.slice(0, 40) + '”' : ''}</small></td>
+    const list = await fetch('/api/photos?limit=60').then((r) => r.json());
+    const shown = list.filter((p) => !photoFilter || (photoFilter === 'pending' ? p.pending : photoFilter === 'message' ? p.mode === 'message' : p.source === photoFilter));
+    $('#photos').innerHTML = shown.map((p) => `
+      <tr style="${p.hidden ? 'opacity:.45' : ''}"><td><a href="${p.mode === 'message' ? p.url : '/p/' + p.id}" target="_blank">${p.thumb ? `<img src="${p.thumb}">` : p.kind === 'video' ? `<video src="${p.url}" muted autoplay loop playsinline style="width:70px;border-radius:6px;display:block"></video>` : `<img src="${p.url}">`}</a></td>
+      <td>${new Date(p.createdAt).toLocaleString()} · <b>${KIND(p)}</b>${p.pending ? ' <span class="pill failed">awaiting approval</span>' : ''}${p.hidden ? ' <span class="pill">hidden</span>' : ''}<br><small class="muted">${esc(p.guest)} ${p.greeting ? '“' + esc(p.greeting.slice(0, 60)) + '”' : ''}</small></td>
       <td><div class="status">${Object.entries(p.shares).map(([k, s]) => `<span class="pill ${s.status}" title="${(s.error || s.url || '').replace(/"/g, '')}">${k}</span>`).join('')}</div></td>
       <td>${Object.values(p.shares).some((s) => s.status === 'failed') ? `<button class="btn" data-retry="${p.id}">Retry</button>` : ''}
-        ${p.kind === 'photo' ? `<button class="btn ghost" data-print="${p.id}" title="Printed ${p.prints || 0}×">🖨️ ${p.prints ? p.prints : ''}</button>` : `<span class="pill">${p.kind === 'video' ? '🔁 video' : '✨ GIF'}</span>`}</td></tr>`).join('') || '<tr><td class="muted">No photos yet</td></tr>';
+        ${p.kind === 'photo' ? `<button class="btn ghost" data-print="${p.id}" title="Printed ${p.prints || 0}×">🖨️ ${p.prints ? p.prints : ''}</button>` : ''}
+        ${p.pending ? `<button class="btn primary" data-mod="${p.id}" data-patch='{"pending":false}'>Approve</button>` : ''}
+        <button class="btn ghost" data-mod="${p.id}" data-patch='{"hidden":${!p.hidden}}' title="${p.hidden ? 'Show in gallery' : 'Hide from gallery & mosaic'}">${p.hidden ? '👁️ Show' : '🙈 Hide'}</button>
+        <button class="btn ghost" data-del="${p.id}" title="Delete for good">🗑️</button></td></tr>`).join('') || '<tr><td class="muted">No photos yet</td></tr>';
+    document.querySelectorAll('[data-mod]').forEach((b) => (b.onclick = async () => { await api('/api/admin/photos/' + b.dataset.mod, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: b.dataset.patch }); photos(); }));
+    document.querySelectorAll('[data-del]').forEach((b) => (b.onclick = async () => { if (!confirm('Delete this file for good?')) return; await api('/api/admin/photos/' + b.dataset.del, { method: 'DELETE' }); photos(); }));
     document.querySelectorAll('[data-print]').forEach((b) => (b.onclick = () => doPrint(b.dataset.print)));
     document.querySelectorAll('[data-retry]').forEach((b) => (b.onclick = async () => { await api('/api/admin/retry/' + b.dataset.retry, { method: 'POST' }); photos(); }));
   }
@@ -349,6 +365,11 @@
   $('#paperSet').onclick = () => setPaper($('#paperLeft').value === '' ? -1 : Number($('#paperLeft').value));
   $('#paperOff').onclick = () => setPaper(-1);
   $('#testPrint').onclick = () => doPrint('latest');
+  document.querySelectorAll('[data-pf]').forEach((b) => (b.onclick = () => {
+    photoFilter = b.dataset.pf;
+    document.querySelectorAll('[data-pf]').forEach((x) => x.classList.toggle('sel', x === b));
+    photos();
+  }));
   $('#bgUp').onclick = async () => {
     let list;
     for (const f of $('#bgFiles').files) {

@@ -219,6 +219,10 @@ function summary(p) {
     page: `${baseUrl()}/p/${p.id}`,
     publicUrl: share.publicUrl(p),
     kind: p.kind || 'photo', // "photo" | "gif" | "video"
+    thumb: p.thumb ? `/photos/${p.thumb}` : null,
+    source: p.source || 'booth', // "booth" | "guest" (uploaded from a phone)
+    hidden: !!p.hidden,
+    pending: !!p.pending,
     mode: p.mode || null,
     mime: p.mime || 'image/jpeg',
     greeting: p.greeting,
@@ -248,6 +252,8 @@ app.post('/api/photos', express.raw({ type: UPLOAD_TYPES, limit: '80mb' }), asyn
     kind: final.kind,
     mime: final.mime,
     mode: String(req.query.mode || '').slice(0, 20),
+    source: 'booth',
+    event: config.get().event.id || null,
     greeting: String(req.query.greeting || '').slice(0, 500),
     guest: String(req.query.guest || '').slice(0, 100),
     camera: String(req.query.camera || ''),
@@ -260,7 +266,7 @@ app.post('/api/photos', express.raw({ type: UPLOAD_TYPES, limit: '80mb' }), asyn
       fs.rm(path.join(store.DIRS.raw, path.basename(r)), { force: true }, () => {});
     }
   }
-  share.enqueue(photo, config.get().autoShare || []);
+  share.enqueue(photo, photo.mode === 'message' ? config.get().guestbook.autoShare || [] : config.get().autoShare || []);
   let printError = null;
   if (config.get().print.enabled && config.get().print.auto && final.kind === 'photo' && req.query.print !== '0') {
     try { startPrint(store.get(id), config.get().print.autoCopies || 1, 'admin'); } catch (e) { printError = e.message; }
@@ -269,9 +275,67 @@ app.post('/api/photos', express.raw({ type: UPLOAD_TYPES, limit: '80mb' }), asyn
   res.json({ ...summary(store.get(id)), printError });
 });
 
+// What guests may see: not hidden, approved, and (by default) no private video messages.
+function isPublic(p) {
+  if (p.hidden || p.pending) return false;
+  if (p.mode === 'message' && !config.get().guestbook.showInGallery) return false;
+  return true;
+}
+
 app.get('/api/photos', (req, res) => {
-  const limit = Math.min(Number(req.query.limit) || 60, 500);
-  res.json(store.list({ limit, offset: Number(req.query.offset) || 0 }).map(summary));
+  const limit = Math.min(Number(req.query.limit) || 60, 2000);
+  const kinds = req.query.kind ? String(req.query.kind).split(',') : null;
+  const filter = (p) => (req.query.public ? isPublic(p) : true) && (!kinds || kinds.includes(p.kind || 'photo'));
+  let list = store.list({ limit, offset: Number(req.query.offset) || 0, filter }).map(summary);
+  if (req.query.order === 'oldest') list = list.reverse();
+  res.json(list);
+});
+
+// Small preview image made by the kiosk / upload page (fast gallery & mosaic on phones).
+app.post('/api/photos/:id/thumb', express.raw({ type: 'image/jpeg', limit: '2mb' }), (req, res) => {
+  const p = store.get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  if (p.thumb) return res.status(409).json({ error: 'Already set' });
+  if (!req.body || req.body[0] !== 0xff || req.body[1] !== 0xd8) return res.status(400).json({ error: 'JPEG only' });
+  const name = p.file.replace(/\.\w+$/, '') + '_thumb.jpg';
+  fs.writeFileSync(path.join(store.DIRS.photos, name), req.body);
+  store.update(p.id, { thumb: name });
+  broadcast('photo', summary(store.get(p.id)));
+  res.json({ ok: true });
+});
+
+// Guests upload their own phone photos & videos (from /upload).
+const uploadCounts = new Map(); // ip -> { n, since }
+app.post('/api/guest-uploads', (req, res, next) => {
+  const c = config.get().guestUploads;
+  if (!c.enabled) return res.status(403).json({ error: 'Uploads are closed' });
+  const ip = req.ip;
+  const now = Date.now();
+  const u = uploadCounts.get(ip) && now - uploadCounts.get(ip).since < 3600e3 ? uploadCounts.get(ip) : { n: 0, since: now };
+  if (++u.n > 300) return res.status(429).json({ error: 'Too many uploads — please try again later' });
+  uploadCounts.set(ip, u);
+  express.raw({ type: () => true, limit: `${c.maxUploadMB || 300}mb` })(req, res, next);
+}, async (req, res) => {
+  const type = media.detect(req.body);
+  if (!type) return res.status(400).json({ error: 'Photos (JPEG) and videos (MP4/MOV) only' });
+  const id = store.newId();
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const saved = `${stamp}_${id}_guest.${type.ext}`;
+  fs.writeFileSync(path.join(store.DIRS.photos, saved), req.body);
+  const { name: file, type: final } = await media.normalize(store.DIRS.photos, saved, type, req.body);
+  const c = config.get();
+  const photo = store.add({
+    id, file, kind: final.kind, mime: final.mime, mode: 'upload', source: 'guest',
+    greeting: String(req.query.message || '').slice(0, 500),
+    guest: String(req.query.guest || '').slice(0, 100),
+    pending: !!c.guestUploads.requireApproval,
+    event: c.event.id || null,
+    createdAt: Date.now(),
+    shares: {}
+  });
+  if (!photo.pending) share.enqueue(photo, c.guestUploads.autoShare || []);
+  broadcast('photo', summary(store.get(id)));
+  res.json(summary(store.get(id)));
 });
 
 app.get('/api/photos/:id', (req, res) => {
@@ -353,6 +417,26 @@ app.post('/api/admin/test/:target', adminAuth, async (req, res) => {
     res.status(400).json({ ok: false, message: e.message });
   }
 });
+// Moderation: hide / show / approve / delete.
+app.post('/api/admin/photos/:id', adminAuth, (req, res) => {
+  const p = store.get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  const patch = {};
+  if ('hidden' in (req.body || {})) patch.hidden = !!req.body.hidden;
+  if ('pending' in (req.body || {})) patch.pending = !!req.body.pending;
+  const wasPending = p.pending;
+  store.update(p.id, patch);
+  if (wasPending && patch.pending === false) share.enqueue(store.get(p.id), config.get().guestUploads.autoShare || []);
+  broadcast('photo', summary(store.get(p.id)));
+  res.json(summary(store.get(p.id)));
+});
+app.delete('/api/admin/photos/:id', adminAuth, (req, res) => {
+  const p = store.remove(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  broadcast('removed', { id: p.id });
+  res.json({ ok: true });
+});
+
 app.post('/api/admin/retry/:id', adminAuth, (req, res) => {
   const p = store.get(req.params.id);
   if (!p) return res.status(404).json({ error: 'Not found' });
@@ -432,6 +516,8 @@ app.delete('/api/admin/overlay', adminAuth, (req, res) => {
 const page = (f) => (req, res) => res.sendFile(path.join(PUBLIC, f));
 app.get('/p/:id', page('guest.html'));
 app.get('/gallery', page('gallery.html'));
+app.get('/upload', page('upload.html'));
+app.get('/mosaic', page('mosaic.html'));
 app.get('/remote', page('remote.html'));
 app.get('/admin', page('admin.html'));
 app.use(express.static(PUBLIC, { maxAge: '1h' }));

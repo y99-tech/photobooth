@@ -30,7 +30,7 @@ const DEFAULTS = {
     camera: 'auto', // "auto" | "dslr" | "webcam"
     countdown: 3,
     mode: 'single', // default mode: "single" | "strip" | "gif" | "boomerang"
-    modes: ['single', 'strip', 'gif', 'boomerang'], // modes guests can pick
+    modes: ['single', 'strip', 'gif', 'boomerang', 'message'], // modes guests can pick ("message" = video guestbook)
     template: 'elegant', // "elegant" | "polaroid" | "minimal" | "none"
     accent: '#c9a36b',
     mirrorPreview: true,
@@ -88,6 +88,29 @@ const DEFAULTS = {
     holdMs: 800, // how long a gesture must be held
     smileThreshold: 0.6,
     clapSensitivity: 0.5
+  },
+
+  guestbook: {
+    // "🎥 Message" mode: guests record a video message (with sound) for the couple.
+    maxSeconds: 20,
+    countdown: 3,
+    showInGallery: false, // messages are private for the couple by default
+    autoShare: ['drive'] // uploads for messages (instead of the global autoShare)
+  },
+
+  guestUploads: {
+    // Guests add their own phone photos/videos at /upload (QR on the start screen & gallery).
+    enabled: true,
+    requireApproval: false, // hide uploads until approved in Admin
+    maxUploadMB: 300,
+    autoShare: ['drive']
+  },
+
+  mosaic: {
+    // Live photo mosaic for the projector: open /mosaic. Upload the couple's picture in Admin.
+    cols: 24,
+    rows: 16,
+    tint: 0.45 // how strongly each tile takes the colour of the big picture (0–1)
   },
 
   animation: {
@@ -246,7 +269,10 @@ function publicView() {
   );
   return { event: c.event, booth: { ...c.booth, remotePin: undefined }, weddingName: c.share.wedding.name, dslr: { livePreview: c.dslr.livePreview }, share: enabled,
     print: { enabled: !!c.print.enabled, auto: !!c.print.auto, maxCopies: c.print.maxCopies },
-    animation: c.animation, greenScreen: c.greenScreen, branding: c.branding, sound: c.sound, handsFree: c.handsFree };
+    animation: c.animation, greenScreen: c.greenScreen, branding: c.branding, sound: c.sound, handsFree: c.handsFree,
+    guestbook: { maxSeconds: c.guestbook.maxSeconds, countdown: c.guestbook.countdown },
+    guestUploads: { enabled: c.guestUploads.enabled, requireApproval: c.guestUploads.requireApproval, maxUploadMB: c.guestUploads.maxUploadMB },
+    mosaic: c.mosaic };
 }
 
 module.exports = { load, get, save, publicView, DEFAULTS, ROOT, CONFIG_PATH };

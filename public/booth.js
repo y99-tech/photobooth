@@ -28,9 +28,11 @@
     single: () => t('single'),
     strip: () => t('strip'),
     gif: () => t('gif'),
-    boomerang: () => t('boomerang')
+    boomerang: () => t('boomerang'),
+    message: () => t('message')
   };
   const isAnim = (m = mode) => m === 'gif' || m === 'boomerang';
+  let message = null; // video guestbook recording { blob, url, thumb }
 
   const TEMPLATES = [
     ['elegant', () => t('elegant')],
@@ -95,6 +97,8 @@
     renderTemplates();
     renderGreetings();
     $('#greetBox').classList.toggle('hidden', !cfg.booth.allowGuestGreeting);
+    $('#uploadQr').classList.toggle('hidden', !cfg.guestUploads.enabled);
+    $('#uploadHint').classList.toggle('hidden', !cfg.guestUploads.enabled);
     $('#printBox').classList.toggle('hidden', !cfg.print.enabled);
     $('#copiesBox').classList.toggle('hidden', (cfg.print.maxCopies || 1) < 2);
     $('#emailBox').classList.toggle('hidden', !(cfg.booth.allowEmail && cfg.share.email));
@@ -432,6 +436,12 @@
     $('#dslrLive').classList.toggle('hidden', useWebcam || !cfg.dslr.livePreview);
     $('#noLive').classList.toggle('hidden', useWebcam || cfg.dslr.livePreview);
     try {
+      if (mode === 'message') {
+        await recordMessage();
+        busy = false;
+        openReview();
+        return;
+      }
       if (useWebcam) await startWebcam();
       else startDslrLive();
       await startLiveKey(useWebcam ? $('#video') : $('#dslrLive'), useWebcam && cfg.booth.mirrorPreview);
@@ -505,8 +515,61 @@
     setTimeout(() => f.classList.remove('on'), 120);
   }
 
+  // ---------------- video guestbook ----------------
+  function messageMime() {
+    const prefs = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+    return prefs.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
+  }
+
+  async function recordMessage() {
+    message = null;
+    const ms = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+      audio: { echoCancellation: true, noiseSuppression: true }
+    });
+    const v = $('#video');
+    v.classList.remove('hidden');
+    v.classList.toggle('mirror', !!cfg.booth.mirrorPreview);
+    $('#dslrLive').classList.add('hidden');
+    $('#noLive').classList.add('hidden');
+    v.srcObject = ms;
+    await v.play().catch(() => {});
+    try {
+      $('#shotinfo').textContent = t('msgReady');
+      await countdown(cfg.guestbook.countdown || 3);
+      const mime = messageMime();
+      const rec = new MediaRecorder(ms, mime ? { mimeType: mime, videoBitsPerSecond: 4e6 } : undefined);
+      const chunks = [];
+      rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+      const stopped = new Promise((r) => (rec.onstop = r));
+      rec.start(1000);
+      Sound.beep(1175, 200);
+      let thumb = null;
+      setTimeout(() => { thumb = Animate.grab(v, 480, false); }, 1200);
+      const max = cfg.guestbook.maxSeconds || 20;
+      const btn = $('#msgStopBtn');
+      btn.textContent = t('msgStop');
+      btn.classList.remove('hidden');
+      const done = new Promise((r) => (btn.onclick = r));
+      for (let s = max; s > 0; s--) {
+        $('#shotinfo').textContent = t('msgRec', { s });
+        if ((await Promise.race([sleep(1000).then(() => 0), done.then(() => 1)])) === 1) break;
+      }
+      btn.classList.add('hidden');
+      rec.stop();
+      await stopped;
+      const blob = new Blob(chunks, { type: (mime || 'video/webm').split(';')[0] });
+      message = { blob, url: URL.createObjectURL(blob), thumb: thumb || Animate.grab(v, 480, false) };
+    } finally {
+      ms.getTracks().forEach((tr) => tr.stop());
+      v.srcObject = stream || null;
+      $('#shotinfo').textContent = '';
+    }
+  }
+
   // ---------------- review ----------------
   function openReview() {
+    document.body.dataset.mode = mode;
     syncGreetChips();
     Stickers.clear();
     $('#beautyBtn').classList.toggle('sel', beautyOn);
@@ -515,6 +578,7 @@
   }
 
   function redraw() {
+    if (mode === 'message') return showMessage();
     if (!shots.length) return;
     if (isAnim()) return redrawAnim();
     composed = Compose.compose(composeOpts(shots.map((s) => keyed(s, cfg.booth.maxLongEdge)), cfg.booth.maxLongEdge));
@@ -580,19 +644,48 @@
     resetIdle();
   }
 
+  function showMessage() {
+    if (!message) return;
+    const box = $('#reviewPic');
+    box.querySelectorAll('canvas, video').forEach((x) => x.remove());
+    const v = Object.assign(document.createElement('video'), { src: message.url, controls: true, autoplay: true, playsInline: true });
+    box.prepend(v);
+    composed = v;
+  }
+
+  // Small preview for the gallery / mosaic (fast on phones).
+  function makeThumb(src) {
+    if (!src) return null;
+    const w = src.videoWidth || src.width, h = src.videoHeight || src.height;
+    const s = Math.min(1, 480 / Math.max(w, h));
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * s);
+    c.height = Math.round(h * s);
+    c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+    return c;
+  }
+
   async function accept() {
     if (screen !== 'review' || !composed || busy) return;
     busy = true;
     const btn = $('#acceptBtn');
     const label = btn.textContent;
     try {
-      let blob, final = null;
-      if (isAnim()) {
+      let blob, final = null, thumbSrc = null;
+      if (mode === 'message') {
+        if (!message) return;
+        btn.disabled = true;
+        btn.textContent = t('savingVideo');
+        blob = message.blob;
+        thumbSrc = message.thumb;
+      } else if (isAnim()) {
+        thumbSrc = Stickers.bake(copyCanvas(anim.frames[0]));
         btn.disabled = true;
         btn.textContent = t(mode === 'boomerang' ? 'makingBoomerang' : 'makingGif');
         blob = await encodeAnim();
       } else {
         final = Stickers.bake(copyCanvas(composed));
+        thumbSrc = final;
         blob = await Compose.toJpeg(final, cfg.booth.jpegQuality);
       }
       // Strips print two-up on a 4x6 sheet; that sheet is uploaded right after the photo.
@@ -605,7 +698,14 @@
         print: sheet ? '0' : '1',
         raw: shots.map((s) => s.raw).filter(Boolean).map((r) => r.split('/').pop()).join(',')
       });
-      current = await api('/api/photos?' + q, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
+      current = await api('/api/photos?' + q, { method: 'POST', headers: { 'Content-Type': blob.type.split(';')[0] }, body: blob });
+      const th = makeThumb(thumbSrc);
+      if (th) Compose.toJpeg(th, 0.8).then((b) => fetch(`/api/photos/${current.id}/thumb`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: b })).catch(() => {});
+      if (mode === 'message') {
+        URL.revokeObjectURL(message.url);
+        message = null;
+        toast(t('thanksMessage'), 5000);
+      }
       if (sheet) {
         await api(`/api/photos/${current.id}/printfile`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: await Compose.toJpeg(sheet, 0.92) });
         if (cfg.print.auto) {
@@ -619,7 +719,7 @@
       const isVideo = current.kind === 'video';
       $('#finalImg').classList.toggle('hidden', isVideo);
       $('#finalVid').classList.toggle('hidden', !isVideo);
-      if (isVideo) { $('#finalVid').src = current.url; $('#finalVid').play().catch(() => {}); }
+      if (isVideo) { $('#finalVid').src = current.url; $('#finalVid').muted = current.mode !== 'message'; $('#finalVid').play().catch(() => {}); }
       else { $('#finalVid').removeAttribute('src'); $('#finalImg').src = current.url; }
       $('#printBox').classList.toggle('hidden', !cfg.print.enabled || current.kind !== 'photo');
       $('#qrImg').src = `/api/photos/${current.id}/qr.svg`;

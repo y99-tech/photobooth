@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f0d0b">
+  <title>Share your photos</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-256.png">
+  <style>
+    .pick { display: block; text-align: center; border: 2px dashed var(--accent); border-radius: 18px; padding: 28px 12px; cursor: pointer; font-size: 19px; }
+    .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 6px; margin-top: 12px; }
+    .thumbs div { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--panel-2); }
+    .thumbs img, .thumbs video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .thumbs span { position: absolute; inset: auto 0 0 0; text-align: center; font-size: 13px; background: rgba(0,0,0,.6); padding: 2px; }
+    .bar { height: 10px; background: var(--panel-2); border-radius: 99px; overflow: hidden; margin-top: 12px; }
+    .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1 class="serif" id="title" style="text-align:center"></h1>
+    <h2 style="text-align:center;font-weight:500;margin:.2em 0" data-i18n="uploadTitle">Share your photos</h2>
+    <p class="muted" style="text-align:center" data-i18n="uploadIntro"></p>
+    <div id="closed" class="card hidden" style="text-align:center">🔒</div>
+    <div id="form">
+      <label class="pick"><input type="file" id="files" accept="image/*,video/*" multiple hidden><span data-i18n="choose">📷 Choose photos / videos</span></label>
+      <div class="thumbs" id="thumbs"></div>
+      <div class="card">
+        <input id="guest" class="field" maxlength="60" data-i18n-ph="yourName" placeholder="Your name (optional)">
+        <textarea id="msg" class="field" maxlength="300" style="margin-top:10px" data-i18n-ph="yourMsg" placeholder="A message for the couple (optional)"></textarea>
+        <div class="row" style="margin-top:12px"><button class="btn primary" id="go" disabled data-i18n="uploadBtn">⬆ Upload</button></div>
+        <div class="bar hidden" id="bar"><i></i></div>
+        <p id="status" style="text-align:center"></p>
+        <p class="muted hidden" id="pending" style="text-align:center;font-size:14px" data-i18n="pendingReview"></p>
+      </div>
+    </div>
+    <div class="row"><a class="btn ghost" href="/gallery" data-i18n="viewGallery">View the whole gallery →</a></div>
+  </div>
+<script src="/i18n.js"></script>
+<script>
+(async function () {
+  const $ = (s) => document.querySelector(s);
+  const cfg = await fetch('/api/config').then((r) => r.json());
+  I18n.set(I18n.pick(cfg.booth.languages, cfg.booth.language));
+  const t = I18n.t;
+  $('#title').textContent = cfg.event.title;
+  document.title = t('uploadTitle') + ' · ' + cfg.event.title;
+  if (!cfg.guestUploads.enabled) { $('#form').classList.add('hidden'); $('#closed').classList.remove('hidden'); return; }
+  $('#pending').classList.toggle('hidden', !cfg.guestUploads.requireApproval);
+  let files = [];
+
+  $('#files').onchange = () => {
+    files = [...$('#files').files];
+    $('#thumbs').innerHTML = '';
+    for (const f of files) {
+      const d = document.createElement('div');
+      const url = URL.createObjectURL(f);
+      d.innerHTML = f.type.startsWith('video') ? `<video src="${url}" muted playsinline></video>` : `<img src="${url}">`;
+      $('#thumbs').appendChild(d);
+    }
+    $('#go').disabled = !files.length;
+    $('#status').textContent = '';
+  };
+
+  // Photos are resized on the phone (max 2400px JPEG): 10x less data over the venue Wi-Fi.
+  function loadImg(f) {
+    return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(f); });
+  }
+  const toBlob = (c, q) => new Promise((r) => c.toBlob(r, 'image/jpeg', q));
+  async function prepare(f) {
+    if (f.type.startsWith('video') || f.type === 'image/gif') return { body: f, type: f.type || 'video/mp4' };
+    const img = await loadImg(f);
+    const draw = (max) => {
+      const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * s);
+      c.height = Math.round(img.naturalHeight * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      return c;
+    };
+    return { body: await toBlob(draw(2400), 0.88), type: 'image/jpeg', thumb: await toBlob(draw(480), 0.8) };
+  }
+
+  $('#go').onclick = async () => {
+    $('#go').disabled = true;
+    $('#bar').classList.remove('hidden');
+    const maxB = (cfg.guestUploads.maxUploadMB || 300) * 1024 * 1024;
+    let ok = 0;
+    const tiles = [...$('#thumbs').children];
+    for (let i = 0; i < files.length; i++) {
+      $('#status').textContent = t('uploading', { i: i + 1, n: files.length });
+      $('#bar i').style.width = (i / files.length) * 100 + '%';
+      try {
+        if (files[i].size > maxB * 1.5) throw new Error('too large');
+        const p = await prepare(files[i]);
+        const q = new URLSearchParams({ guest: $('#guest').value.trim(), message: $('#msg').value.trim() });
+        const r = await fetch('/api/guest-uploads?' + q, { method: 'POST', headers: { 'Content-Type': p.type }, body: p.body });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || r.status);
+        if (p.thumb) await fetch(`/api/photos/${j.id}/thumb`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: p.thumb });
+        tiles[i].insertAdjacentHTML('beforeend', '<span>✅</span>');
+        ok++;
+      } catch (e) {
+        tiles[i].insertAdjacentHTML('beforeend', '<span>⚠️</span>');
+        $('#status').textContent = t('uploadFailed') + e.message;
+      }
+    }
+    $('#bar i').style.width = '100%';
+    $('#status').textContent = t('uploaded', { n: ok });
+    $('#files').value = '';
+    files = [];
+  };
+})();
+</script>
+</body>
+</html>

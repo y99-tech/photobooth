@@ -60,8 +60,17 @@ function setShare(id, target, patch) {
   return p;
 }
 
-function list({ limit = 100, offset = 0 } = {}) {
-  return photos.slice(offset, offset + limit);
+function list({ limit = 100, offset = 0, filter } = {}) {
+  return (filter ? photos.filter(filter) : photos).slice(offset, offset + limit);
+}
+
+function remove(id) {
+  const i = photos.findIndex((p) => p.id === id);
+  if (i < 0) return null;
+  const [p] = photos.splice(i, 1);
+  for (const f of [p.file, p.printFile, p.thumb]) if (f) fs.rmSync(path.join(DIRS.photos, f), { force: true });
+  persist();
+  return p;
 }
 
 function all() {
@@ -72,4 +81,4 @@ function filePath(p) {
   return path.join(DIRS.photos, p.file);
 }
 
-module.exports = { DIRS, newId, add, get, update, setShare, list, all, filePath };
+module.exports = { DIRS, newId, add, get, update, setShare, list, all, filePath, remove };

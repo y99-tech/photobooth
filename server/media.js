@@ -15,7 +15,7 @@ function detect(buf) {
   if (!buf || buf.length < 12) return null;
   if (buf[0] === 0xff && buf[1] === 0xd8) return TYPES.jpg;
   if (buf.toString('ascii', 0, 4) === 'GIF8') return TYPES.gif;
-  if (buf.toString('ascii', 4, 8) === 'ftyp') return TYPES.mp4;
+  if (buf.toString('ascii', 4, 8) === 'ftyp') return TYPES.mp4; // MP4 and iPhone MOV
   if (buf.readUInt32BE(0) === 0x1a45dfa3) return TYPES.webm;
   return null;
 }
@@ -28,6 +28,7 @@ function byExt(file) {
 // H.264 MP4s already play everywhere; anything else is worth converting.
 function needsConversion(type, buf) {
   if (type.ext === 'webm') return true;
+  // (iPhone HEVC videos become H.264 too, so every phone can play them.)
   return type.ext === 'mp4' && !buf.includes('avc1');
 }
 
@@ -46,7 +47,8 @@ function toMp4(src, dest) {
   return new Promise((resolve, reject) => {
     execFile(
       config.get().video.ffmpeg || 'ffmpeg',
-      ['-y', '-loglevel', 'error', '-i', src, '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21',
+      // Audio is kept (video guestbook messages); silent clips simply have none.
+      ['-y', '-loglevel', 'error', '-i', src, '-c:a', 'aac', '-b:a', '128k', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21',
         '-pix_fmt', 'yuv420p', '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-movflags', '+faststart', dest],
       { timeout: 120000 },
       (err, _out, stderr) => (err ? reject(new Error((stderr || err.message).trim())) : resolve(dest))
