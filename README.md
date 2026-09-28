@@ -16,6 +16,7 @@ A light but powerful photobooth for weddings and events.
   - **Facebook Page**, **Instagram**, **Telegram**
   - The guest's own share sheet (WhatsApp, Instagram and more)
 - **Modes:** single photo, 4-shot collage, animated **GIF** (4 poses) and **boomerang** video (a short burst that plays forward and back, saved as MP4). Greetings and frames go on all of them.
+- **Green screen:** removes a green or blue backdrop and puts guests on a background they choose. They see it live while posing. It comes with 4 built-in backgrounds, and you can upload your own.
 - **Printing:** a Print button with copies on the share screen, or auto-print every photo. Works on Pi/Linux (CUPS) and Windows. Includes a paper counter and per-guest limits.
 - **Reliable:** every upload is queued on disk and retried, so photos survive a flaky venue Wi-Fi or a reboot
 - **Light:** 5 small npm dependencies, no build step, no database and no native modules. It runs on a Pi 3B+ and up.
@@ -108,6 +109,7 @@ Guests choose a mode on the start screen: **📷 Single**, **🎞️ 4-shot**, *
 - **Boomerang:** after the countdown the booth records a 1.5-second burst, then plays it forward and backward on a loop. It's saved as a video.
 - **Greetings and frames:** the greeting, name, frame template and custom PNG frame are added to every frame of the animation. Guests see the animation playing on the review screen.
 - **Sharing:** GIFs and boomerangs work everywhere a photo does: the QR guest page (Save, and Share to WhatsApp or Instagram), the gallery and slideshow, Google Drive, FTP, the wedding platform, email and Telegram (as a looping animation). Facebook gets boomerangs as a Page video, and Instagram gets them as a Reel. Instagram doesn't accept GIFs.
+- **Green screen:** removes a green or blue backdrop and puts guests on a background they choose. They see it live while posing. It comes with 4 built-in backgrounds, and you can upload your own.
 - **Printing:** GIFs and boomerangs can't be printed, so the Print button is hidden for them.
 - **Install ffmpeg (recommended):**
   - The kiosk browser records the boomerang as MP4 if it can. Otherwise it records WebM.
@@ -123,6 +125,25 @@ Guests choose a mode on the start screen: **📷 Single**, **🎞️ 4-shot**, *
 | `boomerangSeconds`, `boomerangFps` | The length and smoothness of the burst |
 | `boomerangFormat` | `video` (small and sharp, the default) or `gif` |
 | `videoLoops` | How many back-and-forth loops go into the saved video. Recording takes that long (about 3 s per loop). |
+
+## Green screen
+
+1. **Set up the backdrop:** hang a green (or blue) cloth behind guests. Light it evenly, with no creases or shadows if you can, and keep guests 1–2 m in front of it.
+2. **Turn it on:** go to **Admin → Green screen** and set `enabled`.
+3. **Add backgrounds:** under **Green screen backgrounds**, upload your own (JPEG/PNG, landscape) as well as the 4 built-in ones: Golden lights, Blush & bloom, Starry night and Classic ivory. Uploaded backgrounds are listed first.
+4. **What guests see:** the new background appears live while they pose. On the review screen they can tap a thumbnail to swap it.
+5. **All modes work:** single, 4-shot, GIF and boomerang, together with frames and greetings.
+
+How it works:
+- **It runs on the graphics chip** (WebGL), so it's fast even on a Raspberry Pi 4. If WebGL isn't available, a slower method that uses the main processor takes over.
+- **Screen colour:** `keyColor: auto` samples the backdrop colour from the top corners each session. You can also set a colour yourself, e.g. `#00b140` for green or `#0047bb` for blue.
+- **Tuning:**
+  - Green left behind → raise `similarity`.
+  - People turning see-through → lower `similarity`.
+  - Harsh edges → raise `smoothness`.
+  - Green tint on skin → raise `spill`.
+  - These settings adapt to how vivid your backdrop is. Skin, black suits and white dresses are never removed.
+- **Avoid green clothes!** Anything the same colour as the backdrop becomes see-through.
 
 ## Printing
 

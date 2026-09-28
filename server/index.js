@@ -15,6 +15,8 @@ config.load();
 const app = express();
 const PUBLIC = path.join(config.ROOT, 'public');
 const OVERLAY = path.join(store.DIRS.data, 'overlay.png');
+const BACKGROUNDS = path.join(store.DIRS.data, 'backgrounds');
+fs.mkdirSync(BACKGROUNDS, { recursive: true });
 
 app.disable('x-powered-by');
 app.use(express.json({ limit: '2mb' }));
@@ -151,6 +153,18 @@ app.get('/vendor/gifenc.esm.js', (req, res) =>
 
 app.use('/raw', express.static(store.DIRS.raw, { maxAge: 0 }));
 app.use('/photos', express.static(store.DIRS.photos, { maxAge: '7d', immutable: true }));
+app.use('/backgrounds', express.static(BACKGROUNDS, { maxAge: '1h' }));
+
+// Green-screen backgrounds uploaded by the host (built-in ones are drawn in the browser).
+function listBackgrounds() {
+  return fs
+    .readdirSync(BACKGROUNDS)
+    .filter((f) => /\.(jpe?g|png)$/i.test(f))
+    .sort()
+    .map((f) => ({ id: f, name: f.replace(/^\d+_/, '').replace(/\.\w+$/, '').replace(/[-_]+/g, ' '), url: `/backgrounds/${encodeURIComponent(f)}` }));
+}
+app.get('/api/backgrounds', (req, res) => res.json(listBackgrounds()));
+
 app.get('/overlay.png', (req, res) => (fs.existsSync(OVERLAY) ? res.sendFile(OVERLAY) : res.status(404).end()));
 
 function summary(p) {
@@ -317,6 +331,22 @@ app.post('/api/admin/overlay', adminAuth, express.raw({ type: 'image/png', limit
   fs.writeFileSync(OVERLAY, req.body);
   broadcast('remote', { cmd: 'reload' });
   res.json({ ok: true });
+});
+app.post('/api/admin/backgrounds', adminAuth, express.raw({ type: ['image/jpeg', 'image/png'], limit: '30mb' }), (req, res) => {
+  const b = req.body;
+  const isPng = b && b.length > 8 && b.readUInt32BE(0) === 0x89504e47;
+  const isJpg = b && b.length > 2 && b[0] === 0xff && b[1] === 0xd8;
+  if (!isPng && !isJpg) return res.status(400).json({ error: 'JPEG or PNG only' });
+  const name = String(req.query.name || 'background').replace(/\.[^.]*$/, '').replace(/[^\w -]+/g, '').trim().slice(0, 40) || 'background';
+  const file = `${Date.now()}_${name.replace(/\s+/g, '-')}.${isPng ? 'png' : 'jpg'}`;
+  fs.writeFileSync(path.join(BACKGROUNDS, file), b);
+  broadcast('remote', { cmd: 'reload' });
+  res.json(listBackgrounds());
+});
+app.delete('/api/admin/backgrounds/:id', adminAuth, (req, res) => {
+  fs.rmSync(path.join(BACKGROUNDS, path.basename(req.params.id)), { force: true });
+  broadcast('remote', { cmd: 'reload' });
+  res.json(listBackgrounds());
 });
 app.delete('/api/admin/overlay', adminAuth, (req, res) => {
   fs.rmSync(OVERLAY, { force: true });

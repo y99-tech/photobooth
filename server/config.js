@@ -45,6 +45,17 @@ const DEFAULTS = {
     triggerKeys: ['Enter', ' ', 'AudioVolumeUp', 'AudioVolumeDown', 'PageDown', 'PageUp', 'ArrowRight', 'F5', 'b']
   },
 
+  greenScreen: {
+    enabled: false,
+    keyColor: 'auto', // "auto" (sampled from the top corners) or a colour like "#00b140" (green) / "#0047bb" (blue)
+    similarity: 0.4, // 0–1: how much of the screen colour is removed (raise if green is left behind)
+    smoothness: 0.1, // 0–1: soft edge width (raise for smoother hair edges)
+    spill: 0.3, // 0–1: removes green reflections on skin / clothes
+    defaultBackground: 'builtin:gold', // a built-in id or an uploaded background id
+    allowGuestChoice: true, // guests pick the background on the review screen
+    livePreview: true // show the replaced background live while posing
+  },
+
   animation: {
     size: 720, // long edge (px) of GIFs and boomerang videos
     gifFrames: 4, // poses in GIF mode
@@ -201,7 +212,7 @@ function publicView() {
   );
   return { event: c.event, booth: { ...c.booth, remotePin: undefined }, weddingName: c.share.wedding.name, dslr: { livePreview: c.dslr.livePreview }, share: enabled,
     print: { enabled: !!c.print.enabled, auto: !!c.print.auto, maxCopies: c.print.maxCopies },
-    animation: c.animation };
+    animation: c.animation, greenScreen: c.greenScreen };
 }
 
 module.exports = { load, get, save, publicView, DEFAULTS, ROOT, CONFIG_PATH };

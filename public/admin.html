@@ -52,6 +52,16 @@
     </div>
 
     <div class="card">
+      <h2 style="margin-top:0">🟩 Green screen backgrounds</h2>
+      <p class="muted">Turn it on in the <b>Green screen</b> tab. Put a green (or blue) backdrop behind guests, light it evenly, and keep guests a step or two in front of it. Upload your own backgrounds (JPEG/PNG, landscape 3:2 or 16:9) — 4 built-in ones are always available.</p>
+      <div class="row" style="justify-content:flex-start">
+        <input type="file" id="bgFiles" accept="image/jpeg,image/png" multiple>
+        <button class="btn" id="bgUp">Upload</button>
+      </div>
+      <div class="grid" id="bgList" style="margin-top:12px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))"></div>
+    </div>
+
+    <div class="card">
       <h2 style="margin-top:0">🖨️ Printer</h2>
       <p class="muted">Turn printing on and choose paper size, copies and auto-print in the <b>Printing</b> tab. Leave <i>printer</i> empty to use the system default.</p>
       <div id="printers" class="muted">Looking for printers…</div>
@@ -85,6 +95,10 @@
     'print.extraOptions': 'extra CUPS -o options, one per line', 'print.auto': 'print every photo automatically',
     'booth.modes': 'one per line: single, strip, gif, boomerang', 'animation.boomerangFormat': 'video (MP4/WebM) | gif',
     'video.convertToMp4': 'needs ffmpeg installed — makes boomerangs play on every phone & Instagram',
+    'greenScreen.keyColor': 'auto, or a colour e.g. #00b140 (green) / #0047bb (blue)',
+    'greenScreen.similarity': '0.3–0.6 · raise if green is left, lower if people turn see-through',
+    'greenScreen.smoothness': '0.05–0.3 · softer edges', 'greenScreen.spill': '0.1–0.6 · removes green tint on skin',
+    'greenScreen.defaultBackground': 'builtin:gold · builtin:blush · builtin:night · builtin:ivory · or an uploaded file name',
     'booth.triggerKeys': 'one key per line (Bluetooth shutter / clicker keys)', 'share.wedding.urlPath': 'dot path to the photo URL in the JSON reply, e.g. data.url',
     publicBaseUrl: 'empty = auto (http://LAN-IP:port)', caption: 'placeholders: {greeting} {guest} {title} {hashtag} {url} {date}'
   };
@@ -156,6 +170,7 @@
     ['Booth', ['booth']],
     ['Camera', ['dslr']],
     ['GIF & Boomerang', ['animation', 'video']],
+    ['Green screen', ['greenScreen']],
     ['Printing', ['print']],
     ['Sharing', ['share']]
   ];
@@ -260,6 +275,15 @@
     }
   }
 
+  async function bgs(list) {
+    list = list || (await fetch('/api/backgrounds').then((r) => r.json()));
+    $('#bgList').innerHTML = list.map((b) => `
+      <div><img src="${b.url}" style="aspect-ratio:3/2;border-radius:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:13px;margin-top:4px">
+      <span title="${b.id}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.name}</span><button class="btn ghost" style="min-height:34px;padding:0 10px" data-delbg="${encodeURIComponent(b.id)}">✕</button></div></div>`).join('') ||
+      '<span class="muted">No uploaded backgrounds yet — the built-in ones are used.</span>';
+    document.querySelectorAll('[data-delbg]').forEach((b) => (b.onclick = async () => bgs(await api('/api/admin/backgrounds/' + b.dataset.delbg, { method: 'DELETE' }))));
+  }
+
   async function start() {
     try { cfg = await api('/api/admin/config'); } catch (e) { $('#err').textContent = e.message; return; }
     sessionStorage.setItem('adminPin', pin);
@@ -269,6 +293,7 @@
     sys();
     photos();
     printers();
+    bgs();
     setInterval(photos, 10000);
     setInterval(printers, 10000);
   }
@@ -280,6 +305,15 @@
   $('#paperSet').onclick = () => setPaper($('#paperLeft').value === '' ? -1 : Number($('#paperLeft').value));
   $('#paperOff').onclick = () => setPaper(-1);
   $('#testPrint').onclick = () => doPrint('latest');
+  $('#bgUp').onclick = async () => {
+    let list;
+    for (const f of $('#bgFiles').files) {
+      try { list = await api('/api/admin/backgrounds?name=' + encodeURIComponent(f.name), { method: 'POST', headers: { 'Content-Type': f.type }, body: f }); }
+      catch (e) { alert(f.name + ': ' + e.message); }
+    }
+    $('#bgFiles').value = '';
+    bgs(list);
+  };
   $('#ovUp').onclick = async () => {
     const f = $('#ovFile').files[0];
     if (!f) return;

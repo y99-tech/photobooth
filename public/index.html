@@ -31,6 +31,7 @@
   <section id="live" class="screen hidden">
     <video id="video" autoplay playsinline muted class="hidden"></video>
     <img id="dslrLive" class="lv hidden" alt="">
+    <canvas id="keyLive" class="lv hidden"></canvas>
     <div id="noLive" class="live-msg hidden">👀 Look at the camera!</div>
     <div id="shotinfo"></div>
     <div id="countdown"></div>
@@ -41,6 +42,10 @@
     <div class="split">
       <div class="pic" id="reviewPic"></div>
       <div class="side">
+        <div id="bgBox" class="hidden">
+          <h3>Background 🌄</h3>
+          <div class="bgs" id="bgChips"></div>
+        </div>
         <h3>Frame</h3>
         <div class="chips" id="tplChips"></div>
         <div id="greetBox">
@@ -100,6 +105,7 @@
   <script src="/osk.js"></script>
   <script src="/compose.js"></script>
   <script src="/animate.js"></script>
+  <script src="/chroma.js"></script>
   <script src="/booth.js"></script>
 </body>
 </html>

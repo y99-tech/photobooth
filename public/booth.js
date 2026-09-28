@@ -16,6 +16,11 @@
   let busy = false;
   let copies = 1;
   let anim = null; // { frames: composed canvases, seq, frameMs, player }
+  // Green screen
+  let backgrounds = []; // { id, name, el }
+  let bgId = null;
+  let keyRgb = null; // sampled screen colour when keyColor is "auto"
+  let liveKey = null;
 
   const MODES = {
     single: '📷 Single',
@@ -69,6 +74,7 @@
     if (status.overlay) {
       try { overlay = await Compose.loadImage('/overlay.png?' + Date.now()); } catch {}
     }
+    await loadBackgrounds();
     renderModes();
     renderTemplates();
     renderGreetings();
@@ -86,6 +92,94 @@
       b.onclick = () => shareTo(k, b);
       $('#socialBtns').appendChild(b);
     }
+  }
+
+  // ---------------- green screen ----------------
+  const gsOn = () => !!(cfg.greenScreen && cfg.greenScreen.enabled);
+
+  async function loadBackgrounds() {
+    backgrounds = [];
+    if (!gsOn()) { $('#bgBox').classList.add('hidden'); return; }
+    for (const b of Chroma.builtinList()) backgrounds.push({ ...b, el: Chroma.builtin(b.id.slice(8)) });
+    try {
+      const up = await api('/api/backgrounds');
+      const loaded = await Promise.all(up.map((b) => Compose.loadImage(b.url).then((el) => ({ ...b, el })).catch(() => null)));
+      // Uploaded backgrounds first: they are the ones made for this event.
+      backgrounds = loaded.filter(Boolean).concat(backgrounds);
+    } catch {}
+    resetBackground();
+    $('#bgBox').classList.toggle('hidden', !cfg.greenScreen.allowGuestChoice || backgrounds.length < 2);
+    renderBackgrounds();
+  }
+
+  function resetBackground() {
+    const want = cfg.greenScreen.defaultBackground;
+    bgId = (backgrounds.find((b) => b.id === want) || backgrounds[0] || {}).id || null;
+  }
+
+  function currentBg() {
+    const b = backgrounds.find((x) => x.id === bgId) || backgrounds[0];
+    return b && b.el;
+  }
+
+  function renderBackgrounds() {
+    const box = $('#bgChips');
+    box.innerHTML = '';
+    for (const b of backgrounds) {
+      const btn = document.createElement('button');
+      btn.className = b.id === bgId ? 'sel' : '';
+      btn.title = b.name;
+      const thumb = document.createElement('canvas');
+      thumb.width = 150;
+      thumb.height = 100;
+      const d = { w: b.el.naturalWidth || b.el.width, h: b.el.naturalHeight || b.el.height };
+      const s = Math.max(150 / d.w, 100 / d.h);
+      thumb.getContext('2d').drawImage(b.el, (150 - d.w * s) / 2, (100 - d.h * s) / 2, d.w * s, d.h * s);
+      btn.append(thumb, Object.assign(document.createElement('span'), { textContent: b.name }));
+      btn.onclick = () => { bgId = b.id; renderBackgrounds(); redraw(); resetIdle(); };
+      box.appendChild(btn);
+    }
+  }
+
+  function gsCfg() {
+    return { ...cfg.greenScreen, keyRgb: cfg.greenScreen.keyColor === 'auto' ? keyRgb : null };
+  }
+
+  function ensureKey(src) {
+    if (cfg.greenScreen.keyColor === 'auto' && !keyRgb) keyRgb = Chroma.sampleKey(src);
+  }
+
+  // Replace the green screen in one shot (cached per background, so typing a greeting stays fast).
+  function keyed(shot, longEdge) {
+    if (!gsOn() || !currentBg()) return shot.img;
+    const tag = bgId + '@' + longEdge;
+    if (shot.keyed && shot.keyed.tag === tag) return shot.keyed.canvas;
+    ensureKey(shot.img);
+    const canvas = Chroma.key(shot.img, currentBg(), gsCfg(), longEdge);
+    shot.keyed = { tag, canvas };
+    return canvas;
+  }
+
+  async function startLiveKey(src, flipX) {
+    stopLiveKey();
+    if (!gsOn() || !cfg.greenScreen.livePreview || !currentBg()) return;
+    const ready = () => (src.videoWidth || src.naturalWidth) > 0;
+    for (let i = 0; i < 50 && !ready(); i++) await sleep(100);
+    if (!ready()) return;
+    if (cfg.greenScreen.keyColor === 'auto') {
+      // Sample the backdrop from an un-mirrored copy of the first frame.
+      keyRgb = Chroma.sampleKey(src);
+    }
+    liveKey = Chroma.live($('#keyLive'), src, currentBg, gsCfg(), { flipX });
+    $('#keyLive').classList.remove('hidden');
+    $('#video').classList.add('hidden');
+    $('#dslrLive').classList.add('hidden');
+  }
+
+  function stopLiveKey() {
+    if (liveKey) liveKey.stop();
+    liveKey = null;
+    $('#keyLive').classList.add('hidden');
   }
 
   function renderModes() {
@@ -167,6 +261,9 @@
 
   function home() {
     stopAnim();
+    stopLiveKey();
+    keyRgb = null;
+    if (gsOn()) { resetBackground(); renderBackgrounds(); }
     stopWebcam();
     stopDslrLive();
     shots = [];
@@ -235,6 +332,7 @@
     try {
       if (useWebcam) await startWebcam();
       else startDslrLive();
+      await startLiveKey(useWebcam ? $('#video') : $('#dslrLive'), useWebcam && cfg.booth.mirrorPreview);
       if (mode === 'boomerang') await shootBoomerang(useWebcam);
       const total = mode === 'strip' ? 4 : mode === 'gif' ? cfg.animation.gifFrames || 4 : mode === 'boomerang' ? 0 : 1;
       for (let i = 0; i < total; i++) {
@@ -245,12 +343,14 @@
         shots.push(await captureOne());
         if (!useWebcam && i < total - 1) startDslrLive();
       }
+      stopLiveKey();
       stopDslrLive();
       stopWebcam();
       busy = false;
       openReview();
     } catch (e) {
       busy = false;
+      stopLiveKey();
       console.error(e);
       toast('⚠️ ' + (e.message || 'Camera error'), 5000);
       if (camera === 'dslr' && cfg.booth.camera === 'auto') {
@@ -312,7 +412,7 @@
     if (!shots.length) return;
     if (isAnim()) return redrawAnim();
     composed = Compose.compose({
-      images: shots.map((s) => s.img),
+      images: shots.map((s) => keyed(s, cfg.booth.maxLongEdge)),
       template,
       greeting: $('#greeting').value.trim(),
       guest: $('#guest').value.trim(),
@@ -343,7 +443,7 @@
   function redrawAnim() {
     stopAnim();
     const size = cfg.animation.size || 720;
-    const frames = shots.map((s) => Compose.compose(composeOpts([s.img], size)));
+    const frames = shots.map((s) => Compose.compose(composeOpts([keyed(s, size)], size)));
     const seq = Animate.sequence(frames.length, mode);
     const frameMs = mode === 'gif' ? cfg.animation.gifFrameMs || 600 : Math.round(1000 / (cfg.animation.boomerangFps || 15));
     const canvas = document.createElement('canvas');
