@@ -54,6 +54,20 @@ const DEFAULTS = {
     captureTimeoutMs: 20000
   },
 
+  print: {
+    enabled: false,
+    printer: '', // empty = system default printer
+    auto: false, // print every photo automatically (copies = autoCopies)
+    autoCopies: 1,
+    maxCopies: 2, // most copies a guest can pick per photo
+    maxPrintsPerPhoto: 4, // guard against guests printing the same photo again and again
+    scaling: 'fill', // "fill" (edge to edge, crops a little) | "fit" (whole photo, may leave borders)
+    media: '', // CUPS paper size, e.g. "4x6", "w288h432", "A6", "Postcard" (empty = printer default)
+    borderless: false, // CUPS: ask gutenprint / DNP drivers for borderless output
+    marginMm: 0, // Windows: white border around the photo
+    extraOptions: [] // CUPS: extra "-o" options, one per line
+  },
+
   // Uploads that run automatically for every photo (guest does nothing).
   autoShare: ['drive', 'ftp', 'wedding'],
 
@@ -169,7 +183,8 @@ function publicView() {
   const enabled = Object.fromEntries(
     Object.entries(c.share).map(([k, v]) => [k, !!v.enabled])
   );
-  return { event: c.event, booth: { ...c.booth, remotePin: undefined }, weddingName: c.share.wedding.name, dslr: { livePreview: c.dslr.livePreview }, share: enabled };
+  return { event: c.event, booth: { ...c.booth, remotePin: undefined }, weddingName: c.share.wedding.name, dslr: { livePreview: c.dslr.livePreview }, share: enabled,
+    print: { enabled: !!c.print.enabled, auto: !!c.print.auto, maxCopies: c.print.maxCopies } };
 }
 
 module.exports = { load, get, save, publicView, DEFAULTS, ROOT, CONFIG_PATH };

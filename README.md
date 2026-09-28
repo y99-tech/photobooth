@@ -15,6 +15,7 @@ A light but powerful photobooth for weddings and events.
   - **Digital wedding platforms**, or any HTTP API
   - **Facebook Page**, **Instagram**, **Telegram**
   - The guest's own share sheet (WhatsApp, Instagram and more)
+- **Printing:** a Print button with copies on the share screen, or auto-print every photo. Works on Pi/Linux (CUPS) and Windows. Includes a paper counter and per-guest limits.
 - **Reliable:** every upload is queued on disk and retried, so photos survive a flaky venue Wi-Fi or a reboot
 - **Light:** 4 npm dependencies, no build step, no database and no native modules. It runs on a Pi 3B+ and up.
 
@@ -97,6 +98,36 @@ Set the camera to **JPEG** (or RAW+JPEG). **Turn auto power-off off** on the cam
 - **Custom frame:** upload a transparent PNG in admin, for example one made in Canva. It's drawn over every photo.
 - **Modes:** *Single* photo, or a *4-shot* 2×2 collage.
 - **Offline:** fonts are bundled (Great Vibes, Playfair Display), so it all works without internet.
+
+## Printing
+
+Turn it on in **Admin → Printing**. Then add the printer in the **Printer** card and press **Test print**.
+
+- **Raspberry Pi / Linux / macOS:** printing goes through CUPS.
+  - The Pi installer adds CUPS and Gutenprint drivers.
+  - Add the printer at `http://localhost:631` → *Administration → Add Printer*.
+  - Popular event printers: Canon SELPHY CP1300/CP1500, DNP DS620/DS-RX1, Mitsubishi, HiTi. Any office photo inkjet also works.
+- **Windows:** any installed printer works through the built-in print system (`scripts/print-windows.ps1`). There's nothing extra to install. Just install the printer's own driver.
+
+| Setting | What it does |
+|---|---|
+| `printer` | The printer to use. Leave empty for the system default. Admin lists the printers it finds. |
+| `auto` / `autoCopies` | Print every photo automatically. Handy with a Bluetooth one-button setup. |
+| `maxCopies` | The most copies a guest can pick with the − / + buttons |
+| `maxPrintsPerPhoto` | Stops guests reprinting the same photo again and again |
+| `scaling` | `fill` prints edge to edge (trims a little). `fit` shows the whole photo (may leave a border). |
+| `media` | Paper size for CUPS, e.g. `4x6`, `w288h432` (4×6 in), `A6`, `Postcard`. Leave empty for the printer default. |
+| `borderless`, `extraOptions` | Driver options for CUPS, e.g. `-o` options for your printer |
+| `marginMm` | Windows only: a white border around the photo |
+
+**Paper counter:** in admin, enter how many prints the paper and ink pack holds.
+- Each print counts down.
+- Guests see "out of paper" instead of printing into an empty tray.
+- A failed print gives its paper back to the count.
+
+**Printing as the host:**
+- From the **phone remote**, use **Print** or **Print ×2** on the latest photo.
+- From **admin**, use the 🖨️ button on any photo. This isn't limited like guest prints.
 
 ## Sharing setup
 

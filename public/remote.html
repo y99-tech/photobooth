@@ -71,6 +71,11 @@
         <h3 style="margin-top:0">Latest photo</h3>
         <a id="lastLink" target="_blank"><img id="lastImg" class="photo" alt=""></a>
         <div class="status" id="lastStatus" style="margin-top:10px"></div>
+        <div class="row hidden" id="printRow" style="justify-content:flex-start;margin-top:10px">
+          <button class="btn" data-print="1">🖨️ Print</button>
+          <button class="btn" data-print="2">🖨️ Print ×2</button>
+        </div>
+        <div class="muted" id="printMsg" style="margin-top:8px;font-size:15px"></div>
       </div>
       <p class="muted" style="text-align:center"><a href="/gallery" style="color:var(--accent)">Open gallery</a></p>
     </div>
@@ -81,6 +86,12 @@
   const $ = (s) => document.querySelector(s);
   let pin = localStorage.getItem('boothPin') || '';
   let es;
+  let lastId = null;
+
+  function paperText(st) {
+    if (!st || !st.enabled) return '';
+    return st.paperLeft >= 0 ? `🧻 ${st.paperLeft} prints of paper left` : '';
+  }
 
   async function send(cmd, value) {
     if (navigator.vibrate) navigator.vibrate(30);
@@ -102,6 +113,9 @@
   async function login() {
     const r = await fetch('/api/remote/check', { headers: { 'x-pin': pin } });
     if (!r.ok) { $('#err').textContent = 'Wrong PIN'; return; }
+    const info = await r.json();
+    $('#printRow').classList.toggle('hidden', !(info.print && info.print.enabled));
+    $('#printMsg').textContent = paperText(info.print);
     localStorage.setItem('boothPin', pin);
     $('#login').classList.add('hidden');
     $('#ctl').classList.remove('hidden');
@@ -131,9 +145,27 @@
       $('#lastCard').style.display = '';
       $('#lastImg').src = p.url;
       $('#lastLink').href = '/p/' + p.id;
+      lastId = p.id;
       $('#lastStatus').innerHTML = Object.entries(p.shares || {}).map(([k, s]) => `<span class="pill ${s.status}">${k}: ${s.status}</span>`).join('');
     });
+    es.addEventListener('print', (e) => {
+      const d = JSON.parse(e.data);
+      const j = d.job;
+      const msg = j ? { queued: 'queued', printing: 'printing…', done: 'sent ✓', failed: 'failed: ' + j.error }[j.status] : '';
+      $('#printMsg').textContent = [j ? `🖨️ Print ${msg}` : '', paperText(d)].filter(Boolean).join(' · ');
+    });
   }
+
+  async function print(copies) {
+    if (!lastId) return;
+    const r = await fetch('/api/remote/print/' + lastId, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-pin': pin },
+      body: JSON.stringify({ copies })
+    });
+    if (!r.ok) $('#printMsg').textContent = '⚠️ ' + ((await r.json().catch(() => ({}))).error || 'Print failed');
+  }
+  document.querySelectorAll('[data-print]').forEach((b) => (b.onclick = () => print(Number(b.dataset.print))));
 
   $('#go').onclick = () => { pin = $('#pin').value.trim(); login(); };
   $('#pin').addEventListener('keydown', (e) => e.key === 'Enter' && $('#go').click());

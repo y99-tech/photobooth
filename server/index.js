@@ -7,6 +7,7 @@ const config = require('./config');
 const store = require('./store');
 const camera = require('./camera');
 const share = require('./share');
+const printer = require('./printer');
 const { baseUrl, lanIp } = require('./util');
 
 config.load();
@@ -61,6 +62,32 @@ app.get('/api/events', (req, res) => {
 
 share.onChange((photo) => broadcast('photo', summary(photo)));
 
+printer.onChange((job) => {
+  // A failed job does not count against the guest's per-photo print limit.
+  if (job.status === 'failed') {
+    const p = store.get(job.photoId);
+    if (p) store.update(p.id, { prints: Math.max(0, (p.prints || 0) - job.copies) });
+  }
+  broadcast('print', {
+    job: { id: job.id, photoId: job.photoId, copies: job.copies, status: job.status, error: job.error },
+    ...printer.status()
+  });
+});
+
+function startPrint(photo, copies, source) {
+  const c = config.get().print;
+  copies = Math.max(1, Number(copies) || 1);
+  if (source === 'guest') {
+    copies = Math.min(copies, c.maxCopies || 1);
+    const left = (c.maxPrintsPerPhoto || Infinity) - (photo.prints || 0);
+    if (left <= 0) throw new Error('This photo has already been printed the maximum number of times');
+    copies = Math.min(copies, left);
+  }
+  const job = printer.enqueue({ photoId: photo.id, file: store.filePath(photo), copies, source });
+  store.update(photo.id, { prints: (photo.prints || 0) + job.copies });
+  return job;
+}
+
 // Kiosk reports what it is showing, so phone remotes can mirror it.
 app.post('/api/kiosk/state', (req, res) => {
   kioskState = { ...req.body, at: Date.now() };
@@ -76,7 +103,18 @@ app.post('/api/remote', remoteAuth, (req, res) => {
   broadcast('remote', { cmd, value });
   res.json({ ok: true });
 });
-app.get('/api/remote/check', remoteAuth, (req, res) => res.json({ ok: true }));
+app.get('/api/remote/check', remoteAuth, (req, res) => res.json({ ok: true, print: printer.status() }));
+
+// Host prints (or reprints) a photo from the phone — not limited like guests.
+app.post('/api/remote/print/:id', remoteAuth, (req, res) => {
+  const p = store.get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  try {
+    res.json({ ok: true, job: startPrint(p, (req.body && req.body.copies) || 1, 'admin').id });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
 
 // ---------- booth ----------
 app.get('/api/config', (req, res) => res.json({ ...config.publicView(), baseUrl: baseUrl() }));
@@ -88,7 +126,8 @@ app.get('/api/status', async (req, res) => {
     baseUrl: baseUrl(),
     lanIp: lanIp(),
     photos: store.all().length,
-    overlay: fs.existsSync(OVERLAY)
+    overlay: fs.existsSync(OVERLAY),
+    print: printer.status()
   });
 });
 
@@ -116,6 +155,7 @@ function summary(p) {
     publicUrl: share.publicUrl(p),
     greeting: p.greeting,
     guest: p.guest,
+    prints: p.prints || 0,
     createdAt: p.createdAt,
     shares: Object.fromEntries(
       Object.entries(p.shares || {}).map(([k, v]) => [k, { status: v.status, url: v.url || null, error: v.error || null }])
@@ -147,8 +187,12 @@ app.post('/api/photos', express.raw({ type: 'image/jpeg', limit: '40mb' }), (req
     }
   }
   share.enqueue(photo, config.get().autoShare || []);
+  let printError = null;
+  if (config.get().print.enabled && config.get().print.auto && req.query.print !== '0') {
+    try { startPrint(store.get(id), config.get().print.autoCopies || 1, 'admin'); } catch (e) { printError = e.message; }
+  }
   broadcast('photo', summary(store.get(id)));
-  res.json(summary(store.get(id)));
+  res.json({ ...summary(store.get(id)), printError });
 });
 
 app.get('/api/photos', (req, res) => {
@@ -186,6 +230,18 @@ app.post('/api/photos/:id/email', (req, res) => {
   res.json({ ok: true });
 });
 
+// Guest taps "Print" on the booth.
+app.post('/api/photos/:id/print', (req, res) => {
+  const p = store.get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  try {
+    const job = startPrint(p, (req.body && req.body.copies) || 1, 'guest');
+    res.json({ ok: true, job: job.id, copies: job.copies, ...printer.status() });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 // Guest taps "post to Facebook / Instagram / Telegram" on the booth.
 app.post('/api/photos/:id/share/:target', (req, res) => {
   const p = store.get(req.params.id);
@@ -218,6 +274,27 @@ app.post('/api/admin/retry/:id', adminAuth, (req, res) => {
   for (const t of failed) store.setShare(p.id, t, { status: 'queued', attempts: 0 });
   share.enqueue(p, []);
   res.json({ retried: failed });
+});
+app.get('/api/admin/printers', adminAuth, async (req, res) => {
+  try {
+    res.json({ ...(await printer.listPrinters()), ...printer.status() });
+  } catch (e) {
+    res.status(500).json({ error: e.message, printers: [] });
+  }
+});
+app.post('/api/admin/paper', adminAuth, (req, res) => {
+  printer.setPaper(req.body && req.body.left);
+  broadcast('print', printer.status());
+  res.json(printer.status());
+});
+app.post('/api/admin/print/:id', adminAuth, (req, res) => {
+  const p = req.params.id === 'latest' ? store.all()[0] : store.get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'No photo to print yet — take one first' });
+  try {
+    res.json({ ok: true, job: startPrint(p, (req.body && req.body.copies) || 1, 'admin').id, photo: p.id });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 app.post('/api/admin/overlay', adminAuth, express.raw({ type: 'image/png', limit: '20mb' }), (req, res) => {
   if (!req.body || req.body.readUInt32BE(0) !== 0x89504e47) return res.status(400).json({ error: 'PNG only' });

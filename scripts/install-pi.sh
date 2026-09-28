@@ -9,6 +9,9 @@ USER_NAME="${SUDO_USER:-$USER}"
 echo "==> Installing packages"
 sudo apt-get update
 sudo apt-get install -y gphoto2 curl unclutter
+# Printing: CUPS + Gutenprint (Canon SELPHY, DNP, Mitsubishi, Epson, many dye-sub photo printers)
+sudo apt-get install -y cups printer-driver-gutenprint
+sudo usermod -aG lpadmin "$USER_NAME"
 sudo apt-get install -y chromium-browser 2>/dev/null || sudo apt-get install -y chromium
 if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 18 ]; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
@@ -55,3 +58,4 @@ chmod +x "$DIR/scripts/kiosk.sh"
 echo
 echo "Done! Reboot, or run: $DIR/scripts/kiosk.sh"
 echo "Admin: http://localhost:8080/admin (PIN 1234 — change it)"
+echo "Add your photo printer at http://localhost:631 (Administration → Add Printer)"

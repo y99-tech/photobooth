@@ -14,6 +14,7 @@
   let current = null; // saved photo summary
   let idleTimer = null;
   let busy = false;
+  let copies = 1;
 
   const TEMPLATES = [
     ['elegant', 'Elegant'],
@@ -61,6 +62,8 @@
     renderTemplates();
     renderGreetings();
     $('#greetBox').classList.toggle('hidden', !cfg.booth.allowGuestGreeting);
+    $('#printBox').classList.toggle('hidden', !cfg.print.enabled);
+    $('#copiesBox').classList.toggle('hidden', (cfg.print.maxCopies || 1) < 2);
     $('#emailBox').classList.toggle('hidden', !(cfg.booth.allowEmail && cfg.share.email));
     const social = Object.keys(SOCIAL).filter((k) => cfg.share[k]);
     $('#socialBox').classList.toggle('hidden', !social.length);
@@ -293,6 +296,10 @@
       $('#qrImg').src = `/api/photos/${current.id}/qr.svg`;
       renderShareStatus(current);
       $$('#socialBtns .btn').forEach((b) => (b.disabled = false));
+      setCopies(1);
+      $('#printBtn').disabled = false;
+      $('#printBtn').textContent = cfg.print.auto ? '🖨️ Print another' : '🖨️ Print';
+      $('#printMsg').textContent = current.printError ? '⚠️ ' + current.printError : cfg.print.auto && cfg.print.enabled ? '🖨️ Printing your photo…' : '';
       show('shareScr');
     } catch (e) {
       toast('⚠️ Could not save: ' + e.message, 5000);
@@ -323,6 +330,44 @@
       toast('⚠️ ' + e.message);
     }
     resetIdle();
+  }
+
+  function setCopies(n) {
+    copies = Math.max(1, Math.min(n, cfg.print.maxCopies || 1));
+    $('#copies').textContent = copies;
+    $('#copiesMinus').disabled = copies <= 1;
+    $('#copiesPlus').disabled = copies >= (cfg.print.maxCopies || 1);
+  }
+
+  async function printPhoto() {
+    if (!current) return;
+    const btn = $('#printBtn');
+    btn.disabled = true;
+    try {
+      const r = await api(`/api/photos/${current.id}/print`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ copies })
+      });
+      $('#printMsg').textContent = `🖨️ Printing ${r.copies} cop${r.copies > 1 ? 'ies' : 'y'}…` + (r.queued > 1 ? ` (${r.queued - 1} ahead of you)` : '');
+      setTimeout(() => { btn.disabled = false; btn.textContent = '🖨️ Print another'; }, 4000);
+    } catch (e) {
+      $('#printMsg').textContent = '⚠️ ' + e.message;
+      btn.disabled = /maximum|out of paper/i.test(e.message);
+    }
+    resetIdle();
+  }
+
+  function onPrint({ job }) {
+    if (!job || !current || job.photoId !== current.id || screen !== 'shareScr') return;
+    const MSG = {
+      queued: '🖨️ Waiting for the printer…',
+      printing: '🖨️ Printing… collect your photo at the printer',
+      done: '✅ Sent to the printer — collect it in a moment!',
+      failed: '⚠️ Print failed: ' + job.error
+    };
+    $('#printMsg').textContent = MSG[job.status] || '';
+    if (job.status === 'failed') $('#printBtn').disabled = false;
   }
 
   async function sendEmail() {
@@ -376,6 +421,7 @@
       const p = JSON.parse(e.data);
       if (current && p && p.id === current.id) { current = p; renderShareStatus(p); }
     });
+    es.addEventListener('print', (e) => onPrint(JSON.parse(e.data)));
     es.onopen = () => report();
   }
 
@@ -394,6 +440,9 @@
   $('#acceptBtn').onclick = accept;
   $('#doneBtn').onclick = home;
   $('#emailBtn').onclick = sendEmail;
+  $('#printBtn').onclick = printPhoto;
+  $('#copiesMinus').onclick = () => { setCopies(copies - 1); resetIdle(); };
+  $('#copiesPlus').onclick = () => { setCopies(copies + 1); resetIdle(); };
   $('#greeting').addEventListener('input', () => { syncGreetChips(); redrawSoon(); });
   $('#guest').addEventListener('input', redrawSoon);
   $('#email').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendEmail(); });

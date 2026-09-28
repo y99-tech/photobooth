@@ -68,6 +68,18 @@
         <h3>Scan to download 📲</h3>
         <div class="qr-big"><img id="qrImg" alt=""></div>
         <div class="muted" style="font-size:.8em">Connect to the venue Wi-Fi, then scan</div>
+        <div id="printBox">
+          <h3>Print it 🖨️</h3>
+          <div class="row" style="flex-wrap:nowrap">
+            <div class="stepper" id="copiesBox">
+              <button class="btn" id="copiesMinus" aria-label="Fewer copies">−</button>
+              <span id="copies">1</span>
+              <button class="btn" id="copiesPlus" aria-label="More copies">+</button>
+            </div>
+            <button class="btn primary" id="printBtn">🖨️ Print</button>
+          </div>
+          <div id="printMsg" class="muted" style="font-size:.85em;min-height:1.2em;margin-top:.3em"></div>
+        </div>
         <div id="emailBox">
           <h3>Or email it to me</h3>
           <div class="row" style="flex-wrap:nowrap">

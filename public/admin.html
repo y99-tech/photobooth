@@ -52,6 +52,20 @@
     </div>
 
     <div class="card">
+      <h2 style="margin-top:0">🖨️ Printer</h2>
+      <p class="muted">Turn printing on and choose paper size, copies and auto-print in the <b>Printing</b> tab. Leave <i>printer</i> empty to use the system default.</p>
+      <div id="printers" class="muted">Looking for printers…</div>
+      <div class="row" style="justify-content:flex-start;margin-top:12px">
+        <span>Paper left:</span>
+        <input id="paperLeft" type="number" min="0" class="field" style="width:120px;min-height:44px;font-size:16px" placeholder="∞">
+        <button class="btn" id="paperSet">Set</button>
+        <button class="btn ghost" id="paperOff">Don't count</button>
+        <button class="btn" id="testPrint">Test print (latest photo)</button>
+      </div>
+      <div id="printInfo" class="muted" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
       <h2 style="margin-top:0">📤 Recent photos &amp; uploads</h2>
       <table id="photos"></table>
     </div>
@@ -67,6 +81,8 @@
   const HELP = {
     'booth.camera': 'auto | dslr | webcam', 'booth.mode': 'single | strip', 'booth.template': 'elegant | polaroid | minimal | none',
     'dslr.driver': 'auto | gphoto2 | digicam (Windows)', qrTarget: 'local | remote', autoShare: 'one per line: drive, ftp, wedding, facebook, instagram, telegram',
+    'print.scaling': 'fill (edge to edge) | fit (whole photo)', 'print.media': 'CUPS paper size: 4x6, w288h432, A6, Postcard… (empty = default)',
+    'print.extraOptions': 'extra CUPS -o options, one per line', 'print.auto': 'print every photo automatically',
     'booth.triggerKeys': 'one key per line (Bluetooth shutter / clicker keys)', 'share.wedding.urlPath': 'dot path to the photo URL in the JSON reply, e.g. data.url',
     publicBaseUrl: 'empty = auto (http://LAN-IP:port)', caption: 'placeholders: {greeting} {guest} {title} {hashtag} {url} {date}'
   };
@@ -137,6 +153,7 @@
     ['Event & greetings', ['event']],
     ['Booth', ['booth']],
     ['Camera', ['dslr']],
+    ['Printing', ['print']],
     ['Sharing', ['share']]
   ];
 
@@ -216,8 +233,28 @@
       <tr><td><a href="/p/${p.id}" target="_blank"><img src="${p.url}"></a></td>
       <td>${new Date(p.createdAt).toLocaleString()}<br><small class="muted">${p.guest || ''} ${p.greeting ? '“' + p.greeting.slice(0, 40) + '”' : ''}</small></td>
       <td><div class="status">${Object.entries(p.shares).map(([k, s]) => `<span class="pill ${s.status}" title="${(s.error || s.url || '').replace(/"/g, '')}">${k}</span>`).join('')}</div></td>
-      <td>${Object.values(p.shares).some((s) => s.status === 'failed') ? `<button class="btn" data-retry="${p.id}">Retry</button>` : ''}</td></tr>`).join('') || '<tr><td class="muted">No photos yet</td></tr>';
+      <td>${Object.values(p.shares).some((s) => s.status === 'failed') ? `<button class="btn" data-retry="${p.id}">Retry</button>` : ''}
+        <button class="btn ghost" data-print="${p.id}" title="Printed ${p.prints || 0}×">🖨️ ${p.prints ? p.prints : ''}</button></td></tr>`).join('') || '<tr><td class="muted">No photos yet</td></tr>';
+    document.querySelectorAll('[data-print]').forEach((b) => (b.onclick = () => doPrint(b.dataset.print)));
     document.querySelectorAll('[data-retry]').forEach((b) => (b.onclick = async () => { await api('/api/admin/retry/' + b.dataset.retry, { method: 'POST' }); photos(); }));
+  }
+
+  async function doPrint(id) {
+    try { await api('/api/admin/print/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"copies":1}' }); $('#printInfo').textContent = '🖨️ Sent to printer'; }
+    catch (e) { $('#printInfo').textContent = '❌ ' + e.message; }
+    setTimeout(printers, 1500);
+  }
+
+  async function printers() {
+    try {
+      const r = await api('/api/admin/printers');
+      const list = r.printers.map((n) => `<span class="pill${n === r.default ? ' done' : ''}">${n}${n === r.default ? ' (default)' : ''}</span>`).join(' ');
+      $('#printers').innerHTML = (list || '⚠️ No printers installed — add one in the system printer settings (CUPS: http://localhost:631).') +
+        `<br>Printing is <b>${r.enabled ? 'ON' : 'OFF'}</b> · printed ${r.printed} · in queue ${r.queued}`;
+      if (document.activeElement !== $('#paperLeft')) $('#paperLeft').value = r.paperLeft >= 0 ? r.paperLeft : '';
+    } catch (e) {
+      $('#printers').textContent = '⚠️ ' + e.message;
+    }
   }
 
   async function start() {
@@ -228,12 +265,18 @@
     render();
     sys();
     photos();
+    printers();
     setInterval(photos, 10000);
+    setInterval(printers, 10000);
   }
 
   $('#go').onclick = () => { pin = $('#pin').value.trim(); start(); };
   $('#pin').addEventListener('keydown', (e) => e.key === 'Enter' && $('#go').click());
   $('#save').onclick = async () => { try { await save(); } catch (e) { $('#saved').textContent = '❌ ' + e.message; } };
+  const setPaper = async (left) => { await api('/api/admin/paper', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ left }) }); printers(); };
+  $('#paperSet').onclick = () => setPaper($('#paperLeft').value === '' ? -1 : Number($('#paperLeft').value));
+  $('#paperOff').onclick = () => setPaper(-1);
+  $('#testPrint').onclick = () => doPrint('latest');
   $('#ovUp').onclick = async () => {
     const f = $('#ovFile').files[0];
     if (!f) return;
