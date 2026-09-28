@@ -1,0 +1,152 @@
+/* Bundled fonts (SIL OFL) so greetings look right offline on Pi / Linux / Windows. */
+@font-face { font-family: 'Great Vibes'; src: url(/fonts/great-vibes.woff2) format('woff2'); font-display: swap; }
+@font-face { font-family: 'Playfair Display'; src: url(/fonts/playfair.woff2) format('woff2'); font-display: swap; }
+@font-face { font-family: 'Playfair Display'; font-style: italic; src: url(/fonts/playfair-italic.woff2) format('woff2'); font-display: swap; }
+
+:root {
+  --accent: #c9a36b;
+  --bg: #0f0d0b;
+  --panel: #1c1916;
+  --panel-2: #2a2621;
+  --text: #f6f1ea;
+  --muted: #a89f93;
+  --ok: #5fbf7f;
+  --warn: #e0a84a;
+  --err: #e0605a;
+  --radius: 22px;
+  /* Everything scales with the screen: phone, 1080p TV, 4K touch kiosk. */
+  --u: clamp(10px, 1.1vmin + 0.35vmax, 34px);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, sans-serif;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+body { font-size: var(--u); overscroll-behavior: none; }
+button, input, textarea, select { font: inherit; color: inherit; }
+.kiosk, .kiosk * { user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+body.osk-open .screen { bottom: var(--osk-h, 0px); }
+.kiosk input, .kiosk textarea { user-select: text; -webkit-user-select: text; }
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+.serif { font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; }
+
+/* ---------- buttons: big touch targets (min 64px) ---------- */
+.btn {
+  min-height: calc(var(--u) * 3.4);
+  min-width: calc(var(--u) * 3.4);
+  padding: 0 calc(var(--u) * 1.4);
+  border: 0;
+  border-radius: 999px;
+  background: var(--panel-2);
+  font-size: calc(var(--u) * 1.15);
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  transition: transform 0.08s, background 0.2s, opacity 0.2s;
+}
+.btn:active { transform: scale(0.95); }
+.btn.primary { background: var(--accent); color: #1b140b; }
+.btn.ghost { background: transparent; border: 2px solid var(--panel-2); }
+.btn.sel { outline: 3px solid var(--accent); }
+.btn:disabled { opacity: 0.4; }
+.row { display: flex; gap: calc(var(--u) * 0.8); flex-wrap: wrap; align-items: center; justify-content: center; }
+
+/* ---------- kiosk screens ---------- */
+.screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+#attract { cursor: pointer; text-align: center; background: radial-gradient(circle at 50% 40%, #2b241c, var(--bg) 70%); }
+#attract h1 { font-size: calc(var(--u) * 5); margin: 0; font-weight: 500; }
+#attract h2 { font-size: calc(var(--u) * 1.6); margin: 0.3em 0 2em; font-weight: 400; color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; }
+.tap {
+  width: calc(var(--u) * 13); height: calc(var(--u) * 13); border-radius: 50%;
+  background: var(--accent); color: #1b140b; display: grid; place-items: center;
+  font-size: calc(var(--u) * 1.6); font-weight: 700; animation: pulse 2s infinite;
+  box-shadow: 0 0 0 0 rgba(201, 163, 107, 0.6);
+}
+@keyframes pulse { 70% { box-shadow: 0 0 0 calc(var(--u) * 2.5) rgba(201, 163, 107, 0); } 100% { box-shadow: 0 0 0 0 rgba(201, 163, 107, 0); } }
+.corner { position: fixed; bottom: calc(var(--u) * 1.2); display: flex; gap: calc(var(--u) * 0.6); align-items: center; }
+.corner.left { left: calc(var(--u) * 1.2); }
+.corner.right { right: calc(var(--u) * 1.2); }
+.qr-mini { background: #fff; border-radius: 12px; padding: 6px; width: calc(var(--u) * 6); height: calc(var(--u) * 6); }
+.qr-mini img, .qr-big img { width: 100%; height: 100%; display: block; }
+.hint { font-size: calc(var(--u) * 0.8); color: var(--muted); max-width: calc(var(--u) * 9); text-align: left; }
+
+#live { background: #000; }
+#live video, #live img.lv { width: 100%; height: 100%; object-fit: contain; }
+#live .mirror { transform: scaleX(-1); }
+#countdown {
+  position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+  font-size: calc(var(--u) * 16); font-weight: 800; text-shadow: 0 0 40px rgba(0,0,0,.7);
+}
+#countdown.tick { animation: tick 1s ease-out; }
+@keyframes tick { from { transform: scale(1.4); opacity: 0; } 20% { opacity: 1; } to { transform: scale(0.8); opacity: 0.2; } }
+#shotinfo { position: absolute; top: calc(var(--u) * 1.2); left: 0; right: 0; text-align: center; font-size: calc(var(--u) * 1.4); text-shadow: 0 2px 8px #000; }
+#flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity 0.5s; z-index: 50; }
+#flash.on { opacity: 1; transition: none; }
+.live-msg { position: absolute; font-size: calc(var(--u) * 2); text-align: center; }
+
+#review, #shareScr { padding: calc(var(--u) * 1.2); gap: calc(var(--u) * 1); }
+.split { display: flex; gap: calc(var(--u) * 1.5); width: 100%; height: 100%; align-items: center; justify-content: center; }
+.split > .pic { flex: 1 1 60%; height: 100%; display: flex; align-items: center; justify-content: center; min-width: 0; }
+.split > .pic canvas, .split > .pic img { max-width: 100%; max-height: 100%; border-radius: 10px; box-shadow: 0 10px 50px rgba(0,0,0,.6); }
+.split > .side { flex: 0 1 38%; display: flex; flex-direction: column; gap: calc(var(--u) * 0.9); max-height: 100%; overflow: auto; padding: 4px; }
+@media (orientation: portrait) {
+  .split { flex-direction: column; }
+  .split > .pic { flex: 1 1 55%; height: auto; min-height: 0; }
+  .split > .side { flex: 0 0 auto; width: 100%; max-height: 45%; }
+}
+.side h3 { margin: 0.4em 0 0; font-size: calc(var(--u) * 1); color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; }
+.chips { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 0.5); }
+.chip {
+  border: 0; border-radius: 999px; padding: calc(var(--u) * 0.6) calc(var(--u) * 1);
+  background: var(--panel-2); font-size: calc(var(--u) * 0.95); cursor: pointer; text-align: left;
+  min-height: calc(var(--u) * 2.8);
+}
+.chip.sel { background: var(--accent); color: #1b140b; }
+.field {
+  width: 100%; padding: calc(var(--u) * 0.8) calc(var(--u) * 1); border-radius: 16px; border: 2px solid var(--panel-2);
+  background: var(--panel); font-size: calc(var(--u) * 1.1); min-height: calc(var(--u) * 3);
+}
+.field:focus { outline: none; border-color: var(--accent); }
+textarea.field { resize: none; min-height: calc(var(--u) * 5); }
+
+.qr-big { background: #fff; padding: calc(var(--u) * 0.6); border-radius: 18px; width: min(38vmin, calc(var(--u) * 16)); aspect-ratio: 1; margin: 0 auto; }
+.status { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { padding: 6px 14px; border-radius: 999px; background: var(--panel-2); font-size: calc(var(--u) * 0.8); }
+.pill.done { background: #1f3b2a; color: var(--ok); }
+.pill.failed { background: #3b1f1f; color: var(--err); }
+.pill.running, .pill.queued, .pill.retry { color: var(--warn); }
+.toast {
+  position: fixed; left: 50%; bottom: calc(var(--u) * 2); transform: translateX(-50%); z-index: 90;
+  background: var(--panel-2); padding: 0.8em 1.4em; border-radius: 999px; font-size: calc(var(--u) * 1);
+  box-shadow: 0 6px 30px rgba(0,0,0,.5); transition: opacity 0.3s;
+}
+
+/* ---------- on-screen keyboard (for Raspberry Pi / Linux touch screens) ---------- */
+#osk {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 80; background: #15120f;
+  padding: calc(var(--u) * 0.5); box-shadow: 0 -10px 40px rgba(0,0,0,.6);
+  display: flex; flex-direction: column; gap: calc(var(--u) * 0.35);
+}
+#osk .krow { display: flex; gap: calc(var(--u) * 0.35); justify-content: center; }
+#osk button {
+  flex: 1 1 0; max-width: calc(var(--u) * 4.2); height: calc(var(--u) * 3.2); border: 0; border-radius: 12px;
+  background: var(--panel-2); font-size: calc(var(--u) * 1.2); cursor: pointer;
+}
+#osk button:active { background: var(--accent); color: #111; }
+#osk button.wide { max-width: calc(var(--u) * 9); flex-grow: 2; }
+#osk button.xwide { max-width: calc(var(--u) * 22); flex-grow: 6; }
+#osk button.on { background: var(--accent); color: #111; }
+
+/* ---------- generic pages (guest / remote / gallery / admin) ---------- */
+.page { max-width: 760px; margin: 0 auto; padding: 20px 16px 60px; font-size: 17px; }
+.page h1 { font-weight: 500; margin: 0.2em 0; }
+.card { background: var(--panel); border-radius: var(--radius); padding: 16px; margin: 14px 0; }
+.page .btn { font-size: 17px; min-height: 52px; padding: 0 22px; }
+.page img.photo { width: 100%; border-radius: 14px; display: block; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+.grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; display: block; }

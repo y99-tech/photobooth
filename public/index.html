@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0f0d0b">
+  <title>Photobooth</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="kiosk">
+
+  <!-- 1. Attract / start -->
+  <section id="attract" class="screen">
+    <h1 class="serif" id="evTitle">Photobooth</h1>
+    <h2 id="evSub"></h2>
+    <div class="tap">TAP TO<br>START</div>
+    <div class="row" style="margin-top:calc(var(--u)*2.5)" id="modeRow">
+      <button class="btn ghost" data-mode="single">📷 Single</button>
+      <button class="btn ghost" data-mode="strip">🎞️ 4-shot</button>
+    </div>
+    <div class="corner left">
+      <div class="qr-mini"><img src="/api/qr.svg?to=/gallery" alt=""></div>
+      <div class="hint">Scan on the venue Wi-Fi to see &amp; download all photos</div>
+    </div>
+    <div class="corner right">
+      <span class="muted" id="camLabel"></span>
+      <button class="btn ghost" id="fsBtn" title="Fullscreen">⛶</button>
+    </div>
+  </section>
+
+  <!-- 2. Live view + countdown -->
+  <section id="live" class="screen hidden">
+    <video id="video" autoplay playsinline muted class="hidden"></video>
+    <img id="dslrLive" class="lv hidden" alt="">
+    <div id="noLive" class="live-msg hidden">👀 Look at the camera!</div>
+    <div id="shotinfo"></div>
+    <div id="countdown"></div>
+  </section>
+
+  <!-- 3. Review + greeting -->
+  <section id="review" class="screen hidden">
+    <div class="split">
+      <div class="pic" id="reviewPic"></div>
+      <div class="side">
+        <h3>Frame</h3>
+        <div class="chips" id="tplChips"></div>
+        <div id="greetBox">
+          <h3>Add a greeting 💌</h3>
+          <div class="chips" id="greetChips" style="margin:.5em 0"></div>
+          <textarea id="greeting" class="field osk" inputmode="none" maxlength="160" placeholder="…or write your own wishes"></textarea>
+          <input id="guest" class="field osk" inputmode="none" maxlength="40" placeholder="Your name(s)" style="margin-top:.5em">
+        </div>
+        <div class="row" style="margin-top:.6em">
+          <button class="btn" id="retakeBtn">↺ Retake</button>
+          <button class="btn primary" id="acceptBtn">Looks great ✓</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Share -->
+  <section id="shareScr" class="screen hidden">
+    <div class="split">
+      <div class="pic"><img id="finalImg" alt=""></div>
+      <div class="side" style="text-align:center">
+        <h3>Scan to download 📲</h3>
+        <div class="qr-big"><img id="qrImg" alt=""></div>
+        <div class="muted" style="font-size:.8em">Connect to the venue Wi-Fi, then scan</div>
+        <div id="emailBox">
+          <h3>Or email it to me</h3>
+          <div class="row" style="flex-wrap:nowrap">
+            <input id="email" type="email" class="field osk" inputmode="none" placeholder="you@email.com" maxlength="120">
+            <button class="btn primary" id="emailBtn">Send</button>
+          </div>
+        </div>
+        <div id="socialBox">
+          <h3>Post it</h3>
+          <div class="row" id="socialBtns"></div>
+        </div>
+        <div class="status" id="shareStatus" style="justify-content:center"></div>
+        <button class="btn primary" id="doneBtn" style="margin-top:.6em">Done ✓</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="flash"></div>
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/osk.js"></script>
+  <script src="/compose.js"></script>
+  <script src="/booth.js"></script>
+</body>
+</html>

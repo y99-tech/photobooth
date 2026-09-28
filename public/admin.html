@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Photobooth Admin</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    .page { max-width: 900px; }
+    fieldset { border: 1px solid var(--panel-2); border-radius: 16px; margin: 10px 0; padding: 10px 14px; }
+    legend { color: var(--accent); font-weight: 600; padding: 0 6px; text-transform: capitalize; }
+    label.f { display: grid; grid-template-columns: 200px 1fr; gap: 10px; align-items: center; margin: 8px 0; }
+    label.f span { color: var(--muted); font-size: 14px; word-break: break-word; }
+    label.f input, label.f textarea, label.f select { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--panel-2); background: var(--bg); }
+    label.f input[type=checkbox] { width: 26px; height: 26px; justify-self: start; }
+    label.f textarea { min-height: 80px; font-family: ui-monospace, monospace; font-size: 13px; }
+    @media (max-width: 600px) { label.f { grid-template-columns: 1fr; gap: 4px; } }
+    .tabs { display: flex; gap: 6px; flex-wrap: wrap; position: sticky; top: 0; background: var(--bg); padding: 10px 0; z-index: 5; }
+    .tabs .btn { min-height: 42px; font-size: 15px; }
+    .testrow { display: flex; gap: 10px; align-items: center; margin: 8px 0 4px; }
+    .testrow .msg { font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    td { padding: 6px; border-bottom: 1px solid var(--panel-2); vertical-align: middle; }
+    td img { width: 70px; border-radius: 6px; display: block; }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div id="login" class="card">
+    <h1>⚙️ Photobooth admin</h1>
+    <input id="pin" class="field" type="password" inputmode="numeric" placeholder="Admin PIN (default 1234)">
+    <div class="row" style="justify-content:flex-start;margin-top:12px"><button class="btn primary" id="go">Log in</button></div>
+    <p id="err" style="color:var(--err)"></p>
+  </div>
+
+  <div id="app" class="hidden">
+    <h1>⚙️ Photobooth admin</h1>
+    <div class="card" id="sys"></div>
+    <div class="tabs" id="tabs"></div>
+    <form id="form"></form>
+    <div class="tabs"><button class="btn primary" id="save">💾 Save settings</button><span id="saved" class="muted" style="align-self:center"></span></div>
+
+    <div class="card">
+      <h2 style="margin-top:0">🖼️ Custom frame overlay</h2>
+      <p class="muted">Transparent PNG drawn on top of every photo (e.g. from Canva, 3:2 for DSLR, 16:9 for webcam). Set template to "none" if the frame has its own text.</p>
+      <div class="row" style="justify-content:flex-start">
+        <input type="file" id="ovFile" accept="image/png">
+        <button class="btn" id="ovUp">Upload</button>
+        <button class="btn ghost" id="ovDel">Remove</button>
+      </div>
+      <img id="ovPrev" style="max-width:260px;margin-top:10px;background:repeating-conic-gradient(#333 0 25%,#222 0 50%) 0/20px 20px;border-radius:8px" class="hidden">
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">📤 Recent photos &amp; uploads</h2>
+      <table id="photos"></table>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = (s) => document.querySelector(s);
+  let pin = sessionStorage.getItem('adminPin') || '';
+  let cfg;
+  const TESTABLE = ['email', 'drive', 'ftp', 'facebook', 'instagram', 'telegram'];
+  const HELP = {
+    'booth.camera': 'auto | dslr | webcam', 'booth.mode': 'single | strip', 'booth.template': 'elegant | polaroid | minimal | none',
+    'dslr.driver': 'auto | gphoto2 | digicam (Windows)', qrTarget: 'local | remote', autoShare: 'one per line: drive, ftp, wedding, facebook, instagram, telegram',
+    'booth.triggerKeys': 'one key per line (Bluetooth shutter / clicker keys)', 'share.wedding.urlPath': 'dot path to the photo URL in the JSON reply, e.g. data.url',
+    publicBaseUrl: 'empty = auto (http://LAN-IP:port)', caption: 'placeholders: {greeting} {guest} {title} {hashtag} {url} {date}'
+  };
+
+  async function api(url, opts = {}) {
+    opts.headers = { 'x-pin': pin, ...(opts.headers || {}) };
+    const r = await fetch(url, opts);
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401) { sessionStorage.removeItem('adminPin'); location.reload(); }
+    if (!r.ok) throw new Error(j.message || j.error || 'HTTP ' + r.status);
+    return j;
+  }
+
+  // ---- generic form generated from the config object ----
+  function field(path, value) {
+    const lab = document.createElement('label');
+    lab.className = 'f';
+    const key = path.split('.').pop();
+    lab.innerHTML = `<span>${key}${HELP[path] ? `<br><small>${HELP[path]}</small>` : ''}</span>`;
+    let input;
+    if (typeof value === 'boolean') {
+      input = Object.assign(document.createElement('input'), { type: 'checkbox', checked: value });
+    } else if (Array.isArray(value)) {
+      input = Object.assign(document.createElement('textarea'), { value: value.join('\n') });
+      input.dataset.kind = 'array';
+    } else if (value && typeof value === 'object') {
+      input = Object.assign(document.createElement('textarea'), { value: JSON.stringify(value, null, 2) });
+      input.dataset.kind = 'json';
+    } else if (typeof value === 'number') {
+      input = Object.assign(document.createElement('input'), { type: 'number', value, step: 'any' });
+    } else {
+      const long = String(value).length > 60 || /body|caption|serviceAccountJson/.test(key);
+      input = document.createElement(long ? 'textarea' : 'input');
+      if (!long) input.type = /pass|secret|token|pin|password/i.test(key) ? 'password' : /color|accent/.test(key) ? 'color' : 'text';
+      input.value = value ?? '';
+    }
+    input.dataset.path = path;
+    lab.appendChild(input);
+    return lab;
+  }
+
+  function section(title, obj, prefix) {
+    const fs = document.createElement('fieldset');
+    fs.innerHTML = `<legend>${title}</legend>`;
+    for (const [k, v] of Object.entries(obj)) {
+      const p = prefix ? `${prefix}.${k}` : k;
+      const nested = v && typeof v === 'object' && !Array.isArray(v) && !['headers', 'fields'].includes(k);
+      fs.appendChild(nested ? section(k, v, p) : field(p, v));
+    }
+    if (prefix && prefix.startsWith('share.') && TESTABLE.includes(prefix.split('.')[1])) {
+      const t = prefix.split('.')[1];
+      const row = document.createElement('div');
+      row.className = 'testrow';
+      row.innerHTML = `<button type="button" class="btn">🔌 Save &amp; test</button><span class="msg muted"></span>`;
+      row.querySelector('button').onclick = async () => {
+        const msg = row.querySelector('.msg');
+        msg.textContent = 'Testing…';
+        try { await save(); const r = await api('/api/admin/test/' + t, { method: 'POST' }); msg.textContent = '✅ ' + r.message; }
+        catch (e) { msg.textContent = '❌ ' + e.message; }
+      };
+      fs.appendChild(row);
+    }
+    return fs;
+  }
+
+  const GROUPS = [
+    ['General', ['port', 'adminPin', 'publicBaseUrl', 'qrTarget', 'autoShare', 'caption']],
+    ['Event & greetings', ['event']],
+    ['Booth', ['booth']],
+    ['Camera', ['dslr']],
+    ['Sharing', ['share']]
+  ];
+
+  function render() {
+    const form = $('#form');
+    form.innerHTML = '';
+    $('#tabs').innerHTML = '';
+    GROUPS.forEach(([name, keys], i) => {
+      const box = document.createElement('div');
+      box.dataset.tab = i;
+      if (i) box.classList.add('hidden');
+      const general = {};
+      for (const k of keys) {
+        if (cfg[k] && typeof cfg[k] === 'object' && !Array.isArray(cfg[k])) {
+          if (k === 'share') for (const [sk, sv] of Object.entries(cfg.share)) box.appendChild(section(sk, sv, `share.${sk}`));
+          else box.appendChild(section(k, cfg[k], k));
+        } else general[k] = cfg[k];
+      }
+      if (Object.keys(general).length) box.prepend(section('general', general, ''));
+      form.appendChild(box);
+      const b = document.createElement('button');
+      b.className = 'btn' + (i ? '' : ' sel');
+      b.textContent = name;
+      b.onclick = () => {
+        document.querySelectorAll('#form > div').forEach((d) => d.classList.toggle('hidden', d.dataset.tab != i));
+        document.querySelectorAll('#tabs .btn').forEach((x) => x.classList.toggle('sel', x === b));
+      };
+      $('#tabs').appendChild(b);
+    });
+  }
+
+  function collect() {
+    const out = JSON.parse(JSON.stringify(cfg));
+    for (const el of document.querySelectorAll('#form [data-path]')) {
+      const parts = el.dataset.path.split('.');
+      let o = out;
+      parts.slice(0, -1).forEach((p) => (o = o[p]));
+      const k = parts.at(-1);
+      let v;
+      if (el.type === 'checkbox') v = el.checked;
+      else if (el.type === 'number') v = Number(el.value);
+      else if (el.dataset.kind === 'array') v = el.value.split('\n').map((s) => (s === ' ' ? s : s.trim())).filter((s) => s !== '');
+      else if (el.dataset.kind === 'json') {
+        try { v = JSON.parse(el.value || '{}'); } catch { throw new Error(`${el.dataset.path}: invalid JSON`); }
+      } else v = el.value;
+      o[k] = v;
+    }
+    return out;
+  }
+
+  async function save() {
+    cfg = await api('/api/admin/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(collect()) });
+    if (cfg.adminPin !== pin) { pin = cfg.adminPin; sessionStorage.setItem('adminPin', pin); }
+    $('#saved').textContent = '✓ Saved ' + new Date().toLocaleTimeString();
+  }
+
+  async function sys() {
+    const s = await fetch('/api/status').then((r) => r.json());
+    const c = s.camera;
+    $('#sys').innerHTML = `
+      <b>Camera:</b> ${c.available ? '✅ ' + c.model : '❌ ' + (c.reason || 'not found')} ${c.driver ? `<span class="muted">(${c.driver})</span>` : ''}<br>
+      <b>Platform:</b> ${s.platform} · <b>Photos:</b> ${s.photos}<br>
+      <b>Guests / phones use:</b> <a href="${s.baseUrl}" style="color:var(--accent)">${s.baseUrl}</a><br>
+      <div class="row" style="justify-content:flex-start;margin-top:10px">
+        <div style="text-align:center"><div class="qr-mini" style="width:120px;height:120px"><img src="/api/qr.svg?to=/remote"></div><small>Phone remote</small></div>
+        <div style="text-align:center"><div class="qr-mini" style="width:120px;height:120px"><img src="/api/qr.svg?to=/gallery"></div><small>Gallery</small></div>
+        <a class="btn ghost" href="/" target="_blank">Open booth</a>
+        <a class="btn ghost" href="/gallery?slideshow=1" target="_blank">Slideshow (2nd screen)</a>
+      </div>`;
+    $('#ovPrev').classList.toggle('hidden', !s.overlay);
+    if (s.overlay) $('#ovPrev').src = '/overlay.png?' + Date.now();
+  }
+
+  async function photos() {
+    const list = await fetch('/api/photos?limit=30').then((r) => r.json());
+    $('#photos').innerHTML = list.map((p) => `
+      <tr><td><a href="/p/${p.id}" target="_blank"><img src="${p.url}"></a></td>
+      <td>${new Date(p.createdAt).toLocaleString()}<br><small class="muted">${p.guest || ''} ${p.greeting ? '“' + p.greeting.slice(0, 40) + '”' : ''}</small></td>
+      <td><div class="status">${Object.entries(p.shares).map(([k, s]) => `<span class="pill ${s.status}" title="${(s.error || s.url || '').replace(/"/g, '')}">${k}</span>`).join('')}</div></td>
+      <td>${Object.values(p.shares).some((s) => s.status === 'failed') ? `<button class="btn" data-retry="${p.id}">Retry</button>` : ''}</td></tr>`).join('') || '<tr><td class="muted">No photos yet</td></tr>';
+    document.querySelectorAll('[data-retry]').forEach((b) => (b.onclick = async () => { await api('/api/admin/retry/' + b.dataset.retry, { method: 'POST' }); photos(); }));
+  }
+
+  async function start() {
+    try { cfg = await api('/api/admin/config'); } catch (e) { $('#err').textContent = e.message; return; }
+    sessionStorage.setItem('adminPin', pin);
+    $('#login').classList.add('hidden');
+    $('#app').classList.remove('hidden');
+    render();
+    sys();
+    photos();
+    setInterval(photos, 10000);
+  }
+
+  $('#go').onclick = () => { pin = $('#pin').value.trim(); start(); };
+  $('#pin').addEventListener('keydown', (e) => e.key === 'Enter' && $('#go').click());
+  $('#save').onclick = async () => { try { await save(); } catch (e) { $('#saved').textContent = '❌ ' + e.message; } };
+  $('#ovUp').onclick = async () => {
+    const f = $('#ovFile').files[0];
+    if (!f) return;
+    try { await api('/api/admin/overlay', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: f }); sys(); }
+    catch (e) { alert(e.message); }
+  };
+  $('#ovDel').onclick = async () => { await api('/api/admin/overlay', { method: 'DELETE' }); sys(); };
+  if (pin) start();
+})();
+</script>
+</body>
+</html>
