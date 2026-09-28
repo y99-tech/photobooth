@@ -15,11 +15,17 @@ A light but powerful photobooth for weddings and events.
   - **Digital wedding platforms**, or any HTTP API
   - **Facebook Page**, **Instagram**, **Telegram**
   - The guest's own share sheet (WhatsApp, Instagram and more)
-- **Modes:** single photo, 4-shot collage, animated **GIF** (4 poses) and **boomerang** video (a short burst that plays forward and back, saved as MP4). Greetings and frames go on all of them.
+- **Modes:** single photo, classic **2×6 photo strip** (4 shots), animated **GIF**, **boomerang** video and **video guestbook** messages. Greetings, frames, stickers and your logo go on all of them.
+- **Fun:** drag-and-drop **props and stickers**, a **beauty filter**, a spoken countdown with shutter sounds, and background music.
+- **AI, fully offline:** **background removal without a green screen**, and **hands-free shooting**: ✌️ peace sign or 😁 smile to shoot, 👍 to accept, 👏 clap.
+- **Languages:** English, **Arabic (right-to-left)**, French and Spanish. Guests can switch on the start screen.
+- **Guests' own photos:** guests upload from their phones by scanning a QR code, with optional approval by the host.
+- **Live mosaic wall:** every photo becomes a tile of a giant picture of the couple on the projector.
+- **For photobooth businesses:** save each client's setup as an **event profile**, and make an end-of-night **keepsake pack** (ZIP + guestbook album + highlight video). A **health panel** on the phone warns about camera battery, paper and disk space. Also **stats** and optional **lead capture**.
 - **Green screen:** removes a green or blue backdrop and puts guests on a background they choose. They see it live while posing. It comes with 4 built-in backgrounds, and you can upload your own.
 - **Printing:** a Print button with copies on the share screen, or auto-print every photo. Works on Pi/Linux (CUPS) and Windows. Includes a paper counter and per-guest limits.
 - **Reliable:** every upload is queued on disk and retried, so photos survive a flaky venue Wi-Fi or a reboot
-- **Light:** 5 small npm dependencies, no build step, no database and no native modules. It runs on a Pi 3B+ and up.
+- **Light:** 7 small npm dependencies, no build step, no database and no native modules. It runs on a Pi 4 and up; a Pi 3B+ works without the AI features.
 
 **Enjoying the photobooth?** [☕ Buy me a coffee via PayPal](https://www.paypal.com/donate/?business=mohamed2000youssry%40gmail.com&item_name=Buy+me+a+coffee+-+Photobooth&currency_code=USD). It keeps the project going. Thank you!
 
@@ -29,6 +35,8 @@ A light but powerful photobooth for weddings and events.
 | Phone remote | `http://<booth-ip>:8080/remote` |
 | Guest gallery | `http://<booth-ip>:8080/gallery` |
 | Slideshow for a 2nd TV or projector | `http://<booth-ip>:8080/gallery?slideshow=1` |
+| Live mosaic wall (projector) | `http://<booth-ip>:8080/mosaic` |
+| Guests upload their own photos | `http://<booth-ip>:8080/upload` |
 | Admin / settings | `http://localhost:8080/admin` (PIN `1234`, **change it**) |
 
 ---
@@ -120,7 +128,7 @@ Set the camera to **JPEG** (or RAW+JPEG). **Turn auto power-off off** on the cam
   - **Minimal:** small text in the corner
   - **None**
 - **Custom frame:** upload a transparent PNG in admin, for example one made in Canva. It's drawn over every photo.
-- **Modes:** *Single* photo, or a *4-shot* 2×2 collage.
+- **Modes:** *Single* photo, or *4-shot*: a classic 2×6 strip (`booth.fourShotLayout: strip`) or a 2×2 grid (`grid`).
 - **Offline:** fonts are bundled (Great Vibes, Playfair Display), so it all works without internet.
 
 ## GIF & boomerang
@@ -131,7 +139,6 @@ Guests choose a mode on the start screen: **📷 Single**, **🎞️ 4-shot**, *
 - **Boomerang:** after the countdown the booth records a 1.5-second burst, then plays it forward and backward on a loop. It's saved as a video.
 - **Greetings and frames:** the greeting, name, frame template and custom PNG frame are added to every frame of the animation. Guests see the animation playing on the review screen.
 - **Sharing:** GIFs and boomerangs work everywhere a photo does: the QR guest page (Save, and Share to WhatsApp or Instagram), the gallery and slideshow, Google Drive, FTP, the wedding platform, email and Telegram (as a looping animation). Facebook gets boomerangs as a Page video, and Instagram gets them as a Reel. Instagram doesn't accept GIFs.
-- **Green screen:** removes a green or blue backdrop and puts guests on a background they choose. They see it live while posing. It comes with 4 built-in backgrounds, and you can upload your own.
 - **Printing:** GIFs and boomerangs can't be printed, so the Print button is hidden for them.
 - **Install ffmpeg (recommended):**
   - The kiosk browser records the boomerang as MP4 if it can. Otherwise it records WebM.
@@ -166,6 +173,75 @@ How it works:
   - Green tint on skin → raise `spill`.
   - These settings adapt to how vivid your backdrop is. Skin, black suits and white dresses are never removed.
 - **Avoid green clothes!** Anything the same colour as the backdrop becomes see-through.
+
+## Photo strips, stickers, beauty & sound
+
+- **Photo strips:** 4-shot mode makes a classic 2×6 strip with the couple's names, the greeting and the date in the footer. When printing is on, strips print **two per 4×6 sheet**. Cut down the middle and there's one for the guest and one for the guestbook. DNP printers can cut automatically: add their 2-inch cut option under `print.extraOptions`.
+- **Props and stickers:** 12 built-in props (hearts, crown, sunglasses, moustache, bow tie, party hat, a "Just Married" sign, lips, ring and more).
+  - Tap a prop to add it, drag it with one finger, and pinch to resize and rotate. The ➖ ➕ ↻ 🗑️ buttons do the same.
+  - Stickers are added to the photo and to every frame of a GIF or boomerang.
+- **Beauty filter** (on by default, guests can switch it off): automatic brightness and colour, plus skin-only smoothing. Eyes, hair and the background stay sharp.
+- **Logo watermark:** upload a transparent PNG under **Admin → Logo, music & mosaic picture**. Set its position, size and opacity in *Branding & sound*.
+- **Sound:**
+  - A spoken "3, 2, 1" using the computer's voices, including Arabic where the computer has an Arabic voice. Otherwise it beeps.
+  - A camera shutter sound.
+  - Optional background music (upload an MP3) on the start screen. It gets quieter while guests shoot.
+
+## AI features (offline)
+
+The AI uses Google's MediaPipe models. They run **in the booth's browser**: no internet and no cloud, and guests' faces never leave the booth. The models (12 MB) download once at install (`npm install`, or `npm run models`) and come bundled in the Windows app.
+
+- **Background removal without a green screen:** set **Green screen → method: `ai`**. The booth finds the people in the picture, so any venue works with no backdrop to set up.
+  - Guests see the new background live, and can change it on the review screen.
+  - This works for photos, strips, GIFs and boomerangs.
+  - With a real green screen, `chroma` gives sharper hair edges.
+- **Hands-free** (**Admin → Hands-free → enabled**):
+  - A small camera bubble in the corner shows guests they're seen.
+  - ✌️ **peace sign** → take a photo. 👍 **thumbs up** → accept it, then finish.
+  - Optional 😁 **smile** to start and 👏 **clap** (uses the microphone).
+  - A gesture must be held briefly (`holdMs`), so the booth doesn't go off by accident.
+- **Hardware:** a Pi 4/5 or any recent PC. The first AI use of each session takes about 2–3 seconds to load.
+
+## Languages
+
+- **Setup:** set `booth.language` (the booth's main language) and `booth.languages` (the choices guests see on the start screen), for example `["ar", "en"]`.
+- **Languages included:** English, **Arabic** (the whole layout switches to right-to-left, with an Arabic on-screen keyboard and Arabic calligraphy fonts on the photos), French and Spanish.
+- **Guest phone pages:** the download page, gallery and upload page follow the phone's language when the booth offers it.
+- **Greetings:** each language has default wedding greetings. Your own list under **Event → greetings** is used for the main language. Set `event.greetingsByLang` for others, e.g. `{"ar": ["ألف مبروك!"]}`.
+- **Adding a language:** copy the `en` block in `public/i18n.js`.
+
+## Video guestbook
+
+The **🎥 Message** mode lets guests record a video message with sound for the couple (up to 20 s, with a Stop button).
+- Messages are saved as MP4 and are **private by default**. They don't appear in the public gallery or on the mosaic.
+- They upload to `guestbook.autoShare` (Google Drive by default).
+- The couple gets all of them in the keepsake pack.
+
+## Guest uploads & live mosaic
+
+- **Guest uploads:**
+  - The start screen and gallery show an "Add your own photos" QR code leading to `/upload`.
+  - Guests pick photos and videos (photos are resized on the phone, so uploads are fast over Wi-Fi) and can add their name and a message.
+  - With `guestUploads.requireApproval`, uploads appear only after you approve them. Go to **Admin → Recent photos → ⏳ Awaiting approval**.
+  - Any photo can be **hidden** or **deleted** from the gallery, slideshow and mosaic.
+- **Mosaic wall:** open `/mosaic` on the projector.
+  - Upload the couple's photo under **Admin → Mosaic picture**. Without one, the mosaic builds a big heart.
+  - Every new photo flies in and becomes a tile, tinted so the big picture appears as the night goes on.
+  - Set the grid size with `mosaic.cols` / `mosaic.rows`. The default is 24×16, which is 384 photos.
+
+## For photobooth businesses
+
+- **Event profiles** (Admin → Event & profiles):
+  - **Save current setup** stores everything for this client: names, greetings, frames, logo, backgrounds, music, mosaic picture and sharing accounts.
+  - **Start a new event** gives a clean gallery with the same setup.
+  - **Load** switches back to any saved client in one tap.
+  - Each event keeps its own photos.
+- **Keepsake pack** (Admin → Keepsake): one ZIP for the couple with sorted folders (photos, strips, GIFs, boomerangs, guest uploads, video messages), plus:
+  - **Guestbook album:** an offline web page with every photo and its greeting. Print it to PDF for a printable guestbook.
+  - **Highlight video:** a slideshow with the event music. It needs ffmpeg.
+- **Health alerts:** the phone remote shows camera battery (gphoto2 cameras), free disk space, paper left, upload backlog and CPU temperature. It **vibrates and beeps** when something needs attention.
+- **Stats:** photos by type, prints, shares, named guests, and a photos-per-hour chart.
+- **Lead capture:** turn on `leads.enabled` and set your business name. The email box then shows "Send me news & offers from …", and opt-ins download as CSV.
 
 ## Printing
 

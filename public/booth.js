@@ -571,7 +571,7 @@
 
   // ---------------- review ----------------
   function openReview() {
-    document.body.dataset.mode = mode;
+    document.body.dataset.shotMode = mode;
     syncGreetChips();
     Stickers.clear();
     $('#beautyBtn').classList.toggle('sel', beautyOn);
@@ -915,7 +915,7 @@
   $('#attract').addEventListener('click', (e) => {
     const lb = e.target.closest('[data-lang]');
     if (lb) { setLang(lb.dataset.lang); return; }
-    const m = e.target.closest('[data-mode]');
+    const m = e.target.closest('#modeRow [data-mode]');
     if (m) { setMode(m.dataset.mode); return; }
     if (e.target.closest('#fsBtn') || e.target.closest('.corner') || e.target.closest('#langRow')) return;
     startSession();

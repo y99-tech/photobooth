@@ -1,7 +1,7 @@
 {
   "name": "photobooth-desktop",
   "productName": "Photobooth",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Photobooth for Windows 11 \u2014 DSLR or webcam, greetings, green screen, GIF & boomerang, printing and sharing.",
   "main": "main.js",
   "author": "Photobooth",
@@ -34,7 +34,8 @@
           "server/**",
           "public/**",
           "scripts/print-windows.ps1",
-          "package.json"
+          "package.json",
+          "models/**"
         ]
       }
     ],
@@ -74,10 +75,12 @@
     }
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
     "basic-ftp": "^6.2.1",
     "express": "^5.2.1",
     "gifenc": "^1.0.3",
     "nodemailer": "^10.0.11",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "yazl": "^3.3.1"
   }
 }

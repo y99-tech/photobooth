@@ -16,6 +16,9 @@ let win = null;
 let tray = null;
 let booth = null; // { port, url, baseUrl }
 
+// Countdown voice, shutter sound and music must play without a click first.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {

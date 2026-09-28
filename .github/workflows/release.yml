@@ -35,6 +35,8 @@ jobs:
       - name: Install
         working-directory: desktop
         run: npm ci
+      - name: Download offline AI models (bundled into the app)
+        run: node scripts/fetch-models.js --strict
       - name: Check the booth's packages are bundled
         working-directory: desktop
         shell: bash

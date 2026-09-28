@@ -5,6 +5,17 @@ A light but powerful wedding and event photobooth.
 - **Extras:** greetings, green screen, GIF, boomerang and printing
 - **Sharing:** Wi-Fi QR code, Google Drive, social media, and digital wedding platforms
 
+### ✨ What's inside
+- 📷 Single, 🎞️ **2×6 photo strips** (two per 4×6 print), ✨ GIF, 🔁 boomerang, 🎥 **video guestbook**
+- 🟩 Green screen, or 🤖 **AI background removal with no backdrop**
+- ✌️ 😁 👍 👏 **hands-free shooting** (offline AI)
+- 🎉 Drag-and-drop **props and stickers**, ✨ **beauty filter**, your **logo** on every photo
+- 🔊 Spoken countdown, shutter sound and background music
+- 🌍 **Arabic (right-to-left)**, English, French and Spanish
+- 📱 Guests **upload their own photos** by QR code · 🧩 **live mosaic wall** · 🖨️ printing
+- 🎁 **Keepsake pack** for the couple (all files, guestbook album, highlight video)
+- 💼 Event profiles · 🩺 health alerts on your phone · 📊 stats and lead capture
+
 ### 🪟 Windows 10 / 11 — easiest
 1. Download **`Photobooth-Setup-….exe`** below and double-click it.
 2. If Windows shows *"Windows protected your PC"*, click **More info → Run anyway**. The app isn't code-signed yet.
