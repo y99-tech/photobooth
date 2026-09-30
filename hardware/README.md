@@ -1,11 +1,27 @@
 # 📐 Photobooth totem — CNC cut from ONE MDF sheet
 
-Two photobooth enclosure designs. Each one is cut completely from **one standard MDF sheet as sold in Egypt (122 × 244 cm, 18 mm)** on a CNC router with a 6 mm bit.
+Two photobooth enclosure designs, each with an optional Epson printer edition (below). The standard designs are each cut completely from **one standard MDF sheet as sold in Egypt (122 × 244 cm, 18 mm)** on a CNC router with a 6 mm bit.
 
 | 💍 Wedding — Moorish arch | 🎉 Events — Neon |
 |---|---|
 | ![Wedding](images/wedding-front.png) | ![Events](images/events-front.png) |
 | Ogee arch crest, backlit heart cut-outs, gold engraved double border, heart speaker grille, scalloped camera rosette, engraved **"ألف مبروك"** and **"Just Married"**, scalloped base | "SMILE" letters cut through and backlit, 17 mm LED channels around the whole front, hexagon speaker grille, engraved **"ابتسم"** and **"PHOTO BOOTH"**, glowing base edge |
+
+## 🖨️ Epson edition: for the Epson L8050 / L805
+
+| 💍 Wedding + Epson | 🎉 Events + Epson |
+|---|---|
+| ![Wedding Epson](images/wedding-epson-front.png) | ![Events Epson](images/events-epson-front.png) |
+
+The famous Epson ink-tank photo printers are too wide for the slim tower: the L8050 is about 418 mm and the L805 about 542 mm, while the tower is 324 mm inside. In this edition the printer goes in a matching **printer cabinet (60 × 42 × 37 cm)** that replaces the base, and the tower bolts on top of it.
+
+- **Same height:** the tower is shortened to 1.23 m, so the camera is still at 1.42 m and the whole booth is the same height.
+- **Front:** a wide print window. Wedding has an arch with "خذ صورتك · Your photo"; events has a neon LED channel with "PRINTS · الصور".
+- **Back and sides:** a big back door for loading paper or taking the printer out, a side door for refilling the ink tanks, vents, and handles on both sides.
+- **Tower:** no print slot or printer shelf; one tall service door.
+- **Material:** the cabinet needs more wood, so this edition takes **one full sheet plus a small offcut strip**: about 116 × 35 cm for wedding and 108 × 35 cm for events. Workshops usually have offcuts like this, or you can buy a quarter sheet. There are two DXF files, `…-sheet1.dxf` and `…-sheet2-offcut.dxf`.
+
+> Measure your printer with its trays open before cutting. If it's different, change `EPSON`, `CAB_W`, `CAB_D` and `CAB_H` at the top of `generate.py`.
 
 ## What to send to the CNC workshop
 
@@ -13,8 +29,10 @@ Two photobooth enclosure designs. Each one is cut completely from **one standard
 |---|---|
 | `wedding/photobooth-wedding-mdf18mm.dxf` | Cut file for the wedding design: the whole sheet, 1:1 in mm |
 | `events/photobooth-events-mdf18mm.dxf` | Cut file for the events design |
+| `wedding-epson/…-sheet1.dxf` + `…-sheet2-offcut.dxf` | Wedding, Epson edition: the full sheet plus the offcut strip |
+| `events-epson/…-sheet1.dxf` + `…-sheet2-offcut.dxf` | Events, Epson edition |
 | `photobooth-cnc-guide.pdf` | A3 guide: renders, cutting layouts, dimensioned drawings, parts list, hardware list and an **Arabic page for the CNC operator** |
-| `photobooth-3d-viewer.html` | Interactive 3D model with both designs and an exploded view. Open it in any browser; it works offline. |
+| `photobooth-3d-viewer.html` | Interactive 3D model with both designs, a SELPHY / Epson switch and an exploded view. Open it in any browser; it works offline. |
 | `*/sheet-layout.svg` / `.png`, `*/front-drawing.png` | Previews |
 
 **DXF layers:** every operation has its own layer and colour.
@@ -83,5 +101,10 @@ npm install three@0.160.0 && python3 hardware/build_viewer.py   # 3D viewer
   4. القص الداخلي `CUT_INSIDE`
   5. الأبواب `CUT_DOOR`، على الخط، والقطعة الخارجة هي الباب
   6. القص الخارجي `CUT_OUTSIDE` في النهاية مع تابات
+- **نسخة طابعة إبسون (L8050 / L805):**
+  - الطابعة أعرض من البرج، فبتتحط في دولاب 60 × 42 × 37 سم تحت البرج.
+  - ارتفاع الكاميرا زي ما هو 1.42 م.
+  - تحتاج لوح كامل وشريحة بواقي، حوالي 116 × 35 سم للزفاف و 108 × 35 سم للمناسبات.
+  - فيه ملفين: `sheet1` و `sheet2-offcut`.
 - **قبل القص:** تأكد من مقاس الشاشة (15.6 بوصة رأسية) والرينج لايت (10 بوصة). لو مختلفة، عدّل المقاسات في أول ملف `generate.py`.
 - **التفاصيل:** كل التفاصيل وقائمة الخامات بالعربي موجودة في آخر صفحة من ملف `photobooth-cnc-guide.pdf`.

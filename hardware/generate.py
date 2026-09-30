@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
-Photobooth "totem" enclosures for CNC routers — each design cut from ONE MDF sheet.
+Photobooth "totem" enclosures for CNC routers.
+
+  SELPHY editions  (wedding / events)            : ONE MDF sheet each
+  Epson editions   (wedding-epson / events-epson): the totem stands on a printer cabinet for an
+                   Epson L8050 / L805 → one full sheet + an offcut (size is printed and drawn)
 
   Sheet : 1220 x 2440 mm (standard MDF sheet sold in Egypt, 122 x 244 cm)
   Board : 18 mm MDF (change T for 16 mm)
@@ -32,19 +36,42 @@ T = 18.0                      # board thickness
 SHEET_L, SHEET_W = 2440.0, 1220.0
 MARGIN, GAP = 8.0, 10.0       # sheet edge margin, spacing between parts (6 mm tool + 4 mm web)
 
-W, D, H = 360.0, 260.0, 1600.0   # tower outside width, depth, body height
+W, D = 360.0, 260.0              # tower outside width, depth
 IW, ID = W - 2 * T, D - 2 * T    # inside width (324) / depth (224)
-BASE_W, BASE_D = 600.0, 480.0    # floor plate (stability)
+BASE_W, BASE_D = 600.0, 480.0    # floor plate (SELPHY editions)
+MONITOR = dict(w=225.0, h=357.0)  # monitor body (portrait) for the holder rails
+CAMERA_Y = 1420.0                # camera / ring-light centre above the FLOOR (both editions)
 
-# Functional openings (front panel, measured from the tower floor)
-RING = dict(cx=W / 2, cy=1420.0, r=131.0)           # 10" ring light (254 mm OD) — camera looks through the centre
-SCREEN = dict(x0=82.0, y0=885.0, w=196.0, h=346.0)   # 15.6" portrait touch monitor, viewable area
-PRINT_SLOT = dict(x0=80.0, y0=385.0, w=200.0, h=70.0)  # Canon SELPHY prints come out here
-SPEAKER = dict(cx=W / 2, cy=800.0)
-MONITOR = dict(w=225.0, h=357.0)                     # monitor body (portrait) for the holder rails
+# Epson printer cabinet (the totem stands on it). Inside 564 x 384 x 334 mm fits an
+# Epson L8050 (418 x 305 x 179) or L805 (542 x 289 x 169, ink tanks on the right) with the
+# rear paper feeder up; prints come out through the front window.
+CAB_W, CAB_D, CAB_H = 600.0, 420.0, 370.0
+EPSON = dict(w=418.0, d=305.0, h=179.0)
 
-# Shelf levels (underside of each 18 mm plate)
-LEVELS = dict(bottom=0.0, printer=362.0, camera=1327.0, top=H - T)
+# Set by setup(printer): body height, openings and shelf levels (measured from the tower floor)
+PRINTER = H = RING = SCREEN = PRINT_SLOT = SPEAKER = LEVELS = TEXT_Y = PLATE_Y = LIFT = None
+
+
+def setup(printer):
+    """SELPHY: 1600 mm tower on a floor plate. Epson: shorter tower on a 370 mm printer cabinet,
+    so the camera, screen and total height stay where guests expect them."""
+    global PRINTER, H, RING, SCREEN, PRINT_SLOT, SPEAKER, LEVELS, TEXT_Y, PLATE_Y, LIFT
+    PRINTER = printer
+    LIFT = CAB_H if printer == 'epson' else 0.0            # tower floor height above the ground
+    cy = CAMERA_Y - LIFT
+    H = cy + 180.0
+    RING = dict(cx=W / 2, cy=cy, r=131.0)                 # 10" ring light (254 mm OD); camera looks through it
+    SCREEN = dict(x0=82.0, y0=cy - 535.0, w=196.0, h=346.0)  # 15.6" portrait touch monitor, viewable area
+    SPEAKER = dict(cx=W / 2, cy=cy - 620.0)
+    if printer == 'selphy':
+        PRINT_SLOT = dict(x0=80.0, y0=385.0, w=200.0, h=70.0)  # Canon SELPHY prints come out here
+        LEVELS = dict(bottom=0.0, printer=362.0, camera=cy - 93.0, top=H - T)
+        TEXT_Y = dict(wedding=(668.0, 565.0), events=(660.0, 575.0))   # (Arabic line, Latin line)
+    else:
+        PRINT_SLOT = None                                   # prints come out of the cabinet
+        LEVELS = dict(bottom=0.0, camera=cy - 93.0, top=H - T)
+        TEXT_Y = dict(wedding=(292.0, 190.0), events=(300.0, 215.0))
+    PLATE_Y = [v + T / 2 for v in LEVELS.values()]
 
 LAYERS = {
     # name: (DXF colour, description)
@@ -235,23 +262,24 @@ def front_common(p):
     s = SCREEN
     p.cuts.append(rect(s['x0'], s['y0'], s['w'], s['h'], 3))
     ps = PRINT_SLOT
-    p.cuts.append(rect(ps['x0'], ps['y0'], ps['w'], ps['h'], 10))
+    if ps:
+        p.cuts.append(rect(ps['x0'], ps['y0'], ps['w'], ps['h'], 10))
 
 
 def front_wedding():
-    # Body + Moorish ogee arch crest (1600 → 1850 mm)
-    L = [(0, 1600), (0, 1640)]
-    L += bezier((0, 1640), (0, 1730), (60, 1745), (110, 1770))[1:]
-    L += bezier((110, 1770), (160, 1795), (178, 1820), (180, 1850))[1:]
+    # Body + Moorish ogee arch crest (H → H + 250 mm)
+    L = [(0, H), (0, H + 40)]
+    L += bezier((0, H + 40), (0, H + 130), (60, H + 145), (110, H + 170))[1:]
+    L += bezier((110, H + 170), (160, H + 195), (178, H + 220), (180, H + 250))[1:]
     R = [(W - x, y) for x, y in reversed(L)]
-    crest = Polygon(L + R[1:] + [(W, 1600)])
-    outline = unary_union([box(0, 0, W, 1600), crest]).buffer(1).buffer(-1)
+    crest = Polygon(L + R[1:] + [(W, H)])
+    outline = unary_union([box(0, 0, W, H), crest]).buffer(1).buffer(-1)
     p = Part('front', 'Front panel — Arch', 'الواجهة الأمامية — قوس', outline)
     front_common(p)
     # Hearts cut through the crest (backlight them with a warm LED strip)
-    p.cuts.append(heart(W / 2, 1688, 92))
-    p.cuts.append(heart(100, 1646, 34))
-    p.cuts.append(heart(W - 100, 1646, 34))
+    p.cuts.append(heart(W / 2, H + 88, 92))
+    p.cuts.append(heart(100, H + 46, 34))
+    p.cuts.append(heart(W - 100, H + 46, 34))
     # Speaker grille: holes laid out in a heart
     for i in range(24):
         t = 2 * math.pi * i / 24
@@ -265,22 +293,23 @@ def front_wedding():
     s = SCREEN
     p.engrave += rings(rect(s['x0'] - 12, s['y0'] - 12, s['w'] + 24, s['h'] + 24, 14))
     # Texts (edit here for the couple's names)
-    p.engrave += text_contours('ألف مبروك', FONT_ARABIC, 44, W / 2, 668, max_width=270)
-    p.engrave += text_contours('Just Married', FONT_SCRIPT, 58, W / 2, 565, max_width=290)
+    ya, yl = TEXT_Y['wedding']
+    p.engrave += text_contours('ألف مبروك', FONT_ARABIC, 44, W / 2, ya, max_width=270)
+    p.engrave += text_contours('Just Married', FONT_SCRIPT, 58, W / 2, yl, max_width=290)
     return p
 
 
 def front_events():
-    outline = rect(0, 0, W, 1820, 0).difference(box(0, 1700, W, 1820)).union(rect(0, 1560, W, 260, 70))
+    outline = box(0, 0, W, H + 100).union(rect(0, H - 40, W, 260, 70))
     p = Part('front', 'Front panel — Neon', 'الواجهة الأمامية — نيون', outline)
     front_common(p)
     # "SMILE" cut through the topper — back it with frosted acrylic + LED strip
-    letters = text_contours('SMILE', FONT_BOLD, 96, W / 2, 1712, max_width=292)
+    letters = text_contours('SMILE', FONT_BOLD, 96, W / 2, H + 112, max_width=292)
     for poly in contours_to_polygons(letters):
         p.cuts.append(poly)
     # LED channel: 17 x 8 mm pocket for aluminium LED profile, following the outline
     # (inset 22 mm from the edge; around the rounded top corners the channel follows a 48 mm radius)
-    top, rr = 1820 - 22, 48
+    top, rr = H + 220 - 22, 48
     arc_l = [(70 - rr * math.cos(a), top - rr + rr * math.sin(a)) for a in [i * math.pi / 2 / 12 for i in range(13)]]
     arc_r = [(W - 70 + rr * math.sin(a), top - rr + rr * math.cos(a)) for a in [i * math.pi / 2 / 12 for i in range(13)]]
     path = LineString([(22, 90)] + arc_l + arc_r + [(W - 22, 90)])
@@ -299,27 +328,31 @@ def front_events():
         p.engrave += rings(circle(RING['cx'], RING['cy'], r, 128))
     s = SCREEN
     p.engrave += rings(rect(s['x0'] - 12, s['y0'] - 12, s['w'] + 24, s['h'] + 24, 20))
-    p.engrave += text_contours('PHOTO BOOTH', FONT_BOLD, 30, W / 2, 575, max_width=270)
-    p.engrave += text_contours('ابتسم', FONT_ARABIC_BOLD, 50, W / 2, 660, max_width=200)
+    ya, yl = TEXT_Y['events']
+    p.engrave += text_contours('PHOTO BOOTH', FONT_BOLD, 30, W / 2, yl, max_width=270)
+    p.engrave += text_contours('ابتسم', FONT_ARABIC_BOLD, 50, W / 2, ya, max_width=200)
     return p
 
 
 # ---- shared body ----------------------------------------------------------
-PLATE_Y = [LEVELS['bottom'] + T / 2, LEVELS['printer'] + T / 2, LEVELS['camera'] + T / 2, LEVELS['top'] + T / 2]
-
-
 def back_panel():
-    p = Part('back', 'Back panel (with 2 doors)', 'الظهر (بباباين)', box(0, 0, W, H))
-    p.doors.append(rect(40, 395, W - 80, 917, 0))    # upper service door (screen, camera, PC)
-    p.doors.append(rect(40, 40, W - 80, 300, 0))     # lower door (printer paper, power, ballast)
-    # Finger holes in the doors, vents (upper back + in the lower door)
-    p.cuts.append(('circle', W - 70, 850, 14))
-    p.cuts.append(('circle', W - 70, 190, 14))
-    for i in range(5):
-        p.cuts.append(rect(88 + i * 45 - 5, 1480, 10, 80, 5))
+    door_top = LEVELS['camera'] - 15
+    if PRINTER == 'selphy':
+        p = Part('back', 'Back panel (with 2 doors)', 'الظهر (ببابين)', box(0, 0, W, H))
+        p.doors.append(rect(40, 395, W - 80, door_top - 395, 0))   # upper service door (screen, camera, PC)
+        p.doors.append(rect(40, 40, W - 80, 300, 0))                # lower door (printer paper, power, ballast)
+        p.cuts.append(('circle', W - 70, 850, 14))                  # finger holes
+        p.cuts.append(('circle', W - 70, 190, 14))
+    else:
+        p = Part('back', 'Back panel (with door)', 'الظهر (بباب)', box(0, 0, W, H))
+        p.doors.append(rect(40, 40, W - 80, door_top - 40, 0))      # one tall service door
+        p.cuts.append(('circle', W - 70, 490, 14))
+    for i in range(5):                                              # vents: top of the back + in the (lower) door
+        p.cuts.append(rect(88 + i * 45 - 5, H - 120, 10, 80, 5))
         p.cuts.append(rect(88 + i * 45 - 5, 90, 10, 70, 5))
     # Confirmat screws into the side panels' edges and the plates' edges
-    confirmat_rows(p, [T / 2, W - T / 2], [60, 250, 480, 720, 960, 1200, 1420, 1540])
+    edge_rows = [60, 250] + [y for y in range(480, int(H) - 250, 240)] + [H - 180, H - 60]
+    confirmat_rows(p, [T / 2, W - T / 2], edge_rows)
     confirmat_rows(p, [70, W - 70], PLATE_Y)
     confirmat_rows(p, [W / 2], PLATE_Y[1:])
     return p
@@ -327,7 +360,7 @@ def back_panel():
 
 def side_panel(n, cable=False):
     p = Part(f'side{n}', f'Side panel {n}', f'الجانب {n}', box(0, 0, ID, H))
-    p.cuts.append(rect(ID / 2 - 60, 1080, 120, 34, 17))   # carry handle
+    p.cuts.append(rect(ID / 2 - 60, H - 520, 120, 34, 17))   # carry handle
     if cable:
         p.cuts.append(('circle', ID / 2, 70, 22))          # power cable exit
     confirmat_rows(p, [45, ID / 2, ID - 45], PLATE_Y)
@@ -346,13 +379,15 @@ def plates():
     bottom = plate('bottom', 'Floor plate', 'القاعدة الداخلية', notch=False)
     for x, y in [(40, 40), (IW - 40, 40), (40, ID - 40), (IW - 40, ID - 40)]:
         bottom.drills.append((x, y, 10.0))            # M8 T-nuts: tower → base plate
-    printer = plate('printer', 'Printer shelf', 'رف الطابعة')
     camera = plate('camera', 'Camera shelf', 'رف الكاميرا')
     camera.cuts.append(rect(IW / 2 - 3.5, 45, 7, 110, 3.5))   # 1/4" tripod screw slot (adjust depth)
     top = plate('top', 'Top plate', 'السقف', notch=False)
     for x in (IW / 4, IW / 2, 3 * IW / 4):
         top.cuts.append(('circle', x, ID / 2, 14))           # warm-air vents
-    return [bottom, printer, camera, top]
+    if PRINTER == 'epson':
+        bottom.cuts.append(('circle', IW / 2, ID - 50, 25))   # cables down into the printer cabinet
+        return [bottom, camera, top]
+    return [bottom, plate('printer', 'Printer shelf', 'رف الطابعة'), camera, top]
 
 
 def base_plate(style):
@@ -391,6 +426,73 @@ def ring_overlay(style):
         p.engrave += rings(circle(RING['cx'], RING['cy'], 146, 128))
     p.cuts.append(('circle', RING['cx'], RING['cy'], RING['r']))
     return p
+
+
+# ---- Epson printer cabinet (replaces the floor plate in the Epson editions) --
+CIW, CIH = CAB_W - 2 * T, CAB_H - 2 * T      # inside width 564, inside height 334
+
+
+def cabinet(style):
+    """Top & bottom full size; sides between them; front & back between the sides."""
+    parts = []
+    tx, tz = (CAB_W - W) / 2 + T, (CAB_D - D) / 2 + T     # tower floor plate position on the cabinet top
+    for key, name, name_ar in [('cab_top', 'Cabinet top (tower stands here)', 'سطح دولاب الطابعة'),
+                               ('cab_bottom', 'Cabinet bottom', 'أرضية دولاب الطابعة')]:
+        outline = rect(0, 0, CAB_W, CAB_D, 20 if style == 'events' else 6)
+        p = Part(key, name, name_ar, outline)
+        # confirmat into the sides (x) and the front / back (y) edges
+        confirmat_rows(p, [T / 2, CAB_W - T / 2], [70, CAB_D / 2, CAB_D - 70])
+        confirmat_rows(p, [90, CAB_W / 2, CAB_W - 90], [T / 2, CAB_D - T / 2])
+        if key == 'cab_top':
+            for x, y in [(40, 40), (IW - 40, 40), (40, ID - 40), (IW - 40, ID - 40)]:
+                p.drills.append((tx + x, tz + y, 10.0))            # M8 bolts into the tower floor plate
+            p.cuts.append(('circle', tx + IW / 2, tz + ID - 50, 25))  # cables tower → printer
+            if style == 'events':
+                p.pockets.append(LineString(rect(28, 28, CAB_W - 56, CAB_D - 56, 30).exterior.coords).buffer(6, quad_segs=6))
+            else:
+                p.engrave += rings(outline.buffer(-16, quad_segs=10))
+        else:
+            for x, y in [(55, 55), (CAB_W - 55, 55), (55, CAB_D - 55), (CAB_W - 55, CAB_D - 55)]:
+                p.drills.append((x, y, 10.0))                      # M8 levelling feet
+        parts.append(p)
+    for n in (1, 2):
+        p = Part(f'cab_side{n}', f'Cabinet side {n}', f'جانب الدولاب {n}', box(0, 0, CAB_D, CIH))
+        p.cuts.append(rect(CAB_D / 2 - 60, CIH - 64, 120, 34, 17))       # carry handle
+        confirmat_rows(p, [T / 2, CAB_D - T / 2], [60, CIH / 2, CIH - 60])
+        if n == 2:   # right side: small door to refill the ink tanks (Epson L805 tanks sit on the right)
+            p.doors.append(rect(70, 40, 250, 200, 0))
+            p.cuts.append(('circle', 290, 140, 12))
+        else:
+            for i in range(5):
+                p.cuts.append(rect(120 + i * 40, 60, 10, 150, 5))       # vents
+        parts.append(p)
+    # Front: the window where guests take their prints
+    front = Part('cab_front', 'Cabinet front (print window)', 'واجهة الدولاب (شباك الصور)', box(0, 0, CIW, CIH))
+    if style == 'wedding':
+        L = [(72, 20), (72, 170)] + bezier((72, 170), (72, 215), (200, 215), (CIW / 2, 250))[1:]
+        R = [(CIW - x, y) for x, y in reversed(L)]
+        window = Polygon(L + R[1:]).buffer(-1).buffer(1)            # arched window, matching the crest
+        front.cuts.append(window)
+        front.engrave += rings(box(0, 0, CIW, CIH).buffer(-14, join_style=2))
+        front.engrave += rings(window.buffer(12, quad_segs=12))
+        front.engrave += text_contours('خذ صورتك', FONT_ARABIC, 34, CIW / 2 - 150, 290, max_width=120)
+        front.engrave += text_contours('Your photo', FONT_SCRIPT, 38, CIW / 2 + 150, 290, max_width=130)
+        front.cuts.append(heart(CIW / 2, 290, 30))
+    else:
+        window = rect(62, 20, CIW - 124, 200, 30)
+        front.cuts.append(window)
+        front.pockets.append(LineString(rect(24, 24, CIW - 48, CIH - 48, 24).exterior.coords).buffer(8.5, quad_segs=8))
+        front.engrave += text_contours('PRINTS', FONT_BOLD, 28, CIW / 2 - 90, 272, max_width=150)
+        front.engrave += text_contours('الصور', FONT_ARABIC_BOLD, 40, CIW / 2 + 90, 272, max_width=120)
+        front.cuts.append(('circle', CIW / 2, 272, 8))
+    parts.append(front)
+    # Back: big door for paper, cables and the printer itself
+    back = Part('cab_back', 'Cabinet back (with door)', 'ظهر الدولاب (بباب)', box(0, 0, CIW, CIH))
+    back.doors.append(rect(62, 30, CIW - 124, 270, 0))
+    back.cuts.append(('circle', CIW - 100, 165, 14))
+    back.cuts.append(('circle', 32, 60, 18))                                # power cable
+    parts.append(back)
+    return parts
 
 
 def monitor_holders():
@@ -433,6 +535,98 @@ def place_all(parts):
     return lay
 
 
+def pack(parts, sheets_fixed, order=None, heuristic='bssf'):
+    """MaxRects (best short side fit, rotation allowed). Long panels are pre-placed on sheet 0;
+    everything else goes to sheet 0 if it fits, otherwise to sheet 1 (the offcut)."""
+    def rsize(p, rot):
+        b = affinity.rotate(p.outline, rot, origin=(0, 0)).bounds
+        return b[2] - b[0] + GAP, b[3] - b[1] + GAP
+
+    bins = []
+    for fixed in sheets_fixed:
+        free = [(MARGIN, MARGIN, SHEET_L - 2 * MARGIN + GAP, SHEET_W - 2 * MARGIN + GAP)]
+        for (x, y, w, h) in fixed:
+            free = _cut(free, (x, y, w + GAP, h + GAP))
+        bins.append(free)
+    for p in (order or sorted(parts, key=lambda q: -q.outline.area)):
+        for bi, free in enumerate(bins):
+            best = None
+            for rot in (0, 90):
+                w, h = rsize(p, rot)
+                for (fx, fy, fw, fh) in free:
+                    if w <= fw + 1e-6 and h <= fh + 1e-6:
+                        if heuristic == 'bssf':
+                            score = (min(fw - w, fh - h), max(fw - w, fh - h), fx + fy * 0.01)
+                        elif heuristic == 'baf':
+                            score = (fw * fh - w * h, min(fw - w, fh - h), fx)
+                        else:  # bottom-left
+                            score = (fy + h, fx)
+                        if best is None or score < best[0]:
+                            best = (score, fx, fy, rot, w, h)
+            if best:
+                _, fx, fy, rot, w, h = best
+                p.place, p.sheet = (fx, fy, rot), bi
+                bins[bi] = _cut(free, (fx, fy, w, h))
+                break
+        else:
+            raise SystemExit(f'{p.key} does not fit on any sheet')
+
+
+def _cut(free, r):
+    x, y, w, h = r
+    out = []
+    for (fx, fy, fw, fh) in free:
+        if x >= fx + fw or x + w <= fx or y >= fy + fh or y + h <= fy:
+            out.append((fx, fy, fw, fh))
+            continue
+        if x > fx:
+            out.append((fx, fy, x - fx, fh))
+        if x + w < fx + fw:
+            out.append((x + w, fy, fx + fw - x - w, fh))
+        if y > fy:
+            out.append((fx, fy, fw, y - fy))
+        if y + h < fy + fh:
+            out.append((fx, y + h, fw, fy + fh - y - h))
+    # prune rectangles contained in others
+    return [a for i, a in enumerate(out) if not any(
+        j != i and a[0] >= b[0] and a[1] >= b[1] and a[0] + a[2] <= b[0] + b[2] and a[1] + a[3] <= b[1] + b[3] and (a != b or j < i)
+        for j, b in enumerate(out))]
+
+
+def place_epson(parts):
+    P = {p.key: p for p in parts}
+    fixed = []
+    y = MARGIN
+    for key, w in [('front', W), ('back', W), ('side1', ID), ('side2', ID)]:
+        P[key].place, P[key].sheet = (MARGIN, y, 90), 0
+        b = affinity.rotate(P[key].outline, 90, origin=(0, 0)).bounds
+        fixed.append((MARGIN, y, b[2] - b[0], b[3] - b[1]))
+        y += w + GAP
+    # Try many part orders / strategies; keep the layout that needs the smallest offcut.
+    import random
+    rest = [p for p in parts if p.key not in ('front', 'back', 'side1', 'side2')]
+    rng = random.Random(7)
+    orders = [sorted(rest, key=lambda q: -q.outline.area), sorted(rest, key=lambda q: -max(q.bbox()[2] - q.bbox()[0], q.bbox()[3] - q.bbox()[1]))]
+    orders += [rng.sample(rest, len(rest)) for _ in range(400)]
+    best = None
+    for order in orders:
+        for heur in ('bssf', 'baf', 'bl'):
+            try:
+                pack(rest, [fixed, []], order, heur)
+            except SystemExit:
+                continue
+            spill = [p for p in rest if p.sheet == 1]
+            if spill:
+                x0, y0, x1, y1 = unary_union([placed(p, p.outline) for p in spill]).bounds
+                cost = (x1 + MARGIN) * (y1 + MARGIN)
+            else:
+                cost = 0
+            if best is None or cost < best[0]:
+                best = (cost, {p.key: (p.place, p.sheet) for p in rest})
+    for p in rest:
+        p.place, p.sheet = best[1][p.key]
+
+
 def placed(p, geom_or_circle):
     """Part-local geometry → sheet coordinates."""
     X, Y, rot = p.place
@@ -449,6 +643,8 @@ def placed(p, geom_or_circle):
 
 
 def check_sheet(parts):
+    if not parts:
+        return 0
     geoms = [placed(p, p.outline) for p in parts]
     for p, g in zip(parts, geoms):
         x0, y0, x1, y1 = g.bounds
@@ -461,8 +657,16 @@ def check_sheet(parts):
     return used / (SHEET_L * SHEET_W)
 
 
+def offcut_size(parts):
+    """Smallest board (rounded up to 10 mm, with margins) that holds these parts."""
+    geoms = [placed(p, p.outline) for p in parts]
+    x1 = max(g.bounds[2] for g in geoms) + MARGIN
+    y1 = max(g.bounds[3] for g in geoms) + MARGIN
+    return [math.ceil(x1 / 10) * 10, math.ceil(y1 / 10) * 10]
+
+
 # ---------------------------------------------------------------- DXF export
-def write_dxf(parts, path, title):
+def write_dxf(parts, path, title, size=(SHEET_L, SHEET_W)):
     doc = ezdxf.new('R2010', setup=True)
     doc.units = ezdxf.units.MM
     doc.header['$INSUNITS'] = 4
@@ -480,7 +684,7 @@ def write_dxf(parts, path, title):
         for ring in rings(g):
             poly(ring[:-1] if ring[0] == ring[-1] else ring, layer)
 
-    poly([(0, 0), (SHEET_L, 0), (SHEET_L, SHEET_W), (0, SHEET_W)], 'SHEET')
+    poly([(0, 0), (size[0], 0), (size[0], size[1]), (0, size[1])], 'SHEET')
     for p in parts:
         o = placed(p, p.outline)
         poly(list(o.exterior.coords)[:-1], 'CUT_OUTSIDE')
@@ -496,7 +700,7 @@ def write_dxf(parts, path, title):
             msp.add_lwpolyline([(round(x, 3), round(y, 3)) for x, y in placed(p, e)], close=e[0] == e[-1], dxfattribs={'layer': 'ENGRAVE_V'})
         c = o.representative_point()
         msp.add_text(p.name, height=14, dxfattribs={'layer': 'LABELS'}).set_placement((c.x, c.y), align=ezdxf.enums.TextEntityAlignment.MIDDLE_CENTER)
-    msp.add_text(title, height=16, dxfattribs={'layer': 'LABELS'}).set_placement((20, SHEET_W + 20))
+    msp.add_text(title, height=16, dxfattribs={'layer': 'LABELS'}).set_placement((20, size[1] + 20))
     doc.saveas(path)
 
 
@@ -505,20 +709,30 @@ def poses(parts):
     """World coords (mm): x right, y up, z towards the guest. Tower centred on x=0, z=0; floor y=0."""
     P = {p.key: p for p in parts}
     zf = D / 2
-    P['front'].pose = dict(plane='xy', x=-W / 2, y=0, z=zf - T, flip=False)
-    P['back'].pose = dict(plane='xy', x=W / 2, y=0, z=-zf, flip=True)          # seen from behind
-    P['side1'].pose = dict(plane='zy', x=-W / 2, y=0, z=zf - T, flip=False)
-    P['side2'].pose = dict(plane='zy', x=W / 2 - T, y=0, z=zf - T, flip=False)
-    for k in ('bottom', 'printer', 'camera', 'top'):
-        P[k].pose = dict(plane='xz', x=-IW / 2, y=LEVELS[k], z=zf - T, flip=False)
-    P['base'].pose = dict(plane='xz', x=-BASE_W / 2, y=-T, z=BASE_D / 2, flip=False)
-    P['ring'].pose = dict(plane='xy', x=-W / 2, y=0, z=zf, flip=False)
+    L = LIFT   # tower floor height (0, or on top of the printer cabinet)
+    P['front'].pose = dict(plane='xy', x=-W / 2, y=L, z=zf - T, flip=False)
+    P['back'].pose = dict(plane='xy', x=W / 2, y=L, z=-zf, flip=True)          # seen from behind
+    P['side1'].pose = dict(plane='zy', x=-W / 2, y=L, z=zf - T, flip=False)
+    P['side2'].pose = dict(plane='zy', x=W / 2 - T, y=L, z=zf - T, flip=False)
+    for k in LEVELS:
+        P[k].pose = dict(plane='xz', x=-IW / 2, y=L + LEVELS[k], z=zf - T, flip=False)
+    if 'base' in P:
+        P['base'].pose = dict(plane='xz', x=-BASE_W / 2, y=-T, z=BASE_D / 2, flip=False)
+    P['ring'].pose = dict(plane='xy', x=-W / 2, y=L, z=zf, flip=False)
     for i, k in enumerate(('rail1', 'rail2')):
         x = SCREEN['x0'] + SCREEN['w'] / 2 + (-1 if i == 0 else 1) * (MONITOR['w'] / 2 + 20) - W / 2
-        P[k].pose = dict(plane='xy', x=x - 20, y=SCREEN['y0'] + SCREEN['h'] / 2 - 190, z=zf - 2 * T, rot90=True)
+        P[k].pose = dict(plane='xy', x=x - 20, y=L + SCREEN['y0'] + SCREEN['h'] / 2 - 190, z=zf - 2 * T, rot90=True)
     for i, k in enumerate(('bar1', 'bar2')):
         y = SCREEN['y0'] + SCREEN['h'] / 2 + (-1 if i == 0 else 1) * 110
-        P[k].pose = dict(plane='xy', x=-150, y=y - 27, z=zf - 3 * T, flip=False)
+        P[k].pose = dict(plane='xy', x=-150, y=L + y - 27, z=zf - 3 * T, flip=False)
+    if 'cab_top' in P:
+        cz = CAB_D / 2
+        P['cab_bottom'].pose = dict(plane='xz', x=-CAB_W / 2, y=0, z=cz)
+        P['cab_top'].pose = dict(plane='xz', x=-CAB_W / 2, y=CAB_H - T, z=cz)
+        P['cab_side1'].pose = dict(plane='zy', x=-CAB_W / 2, y=T, z=cz)
+        P['cab_side2'].pose = dict(plane='zy', x=CAB_W / 2 - T, y=T, z=cz)
+        P['cab_front'].pose = dict(plane='xy', x=-CIW / 2, y=T, z=cz - T)
+        P['cab_back'].pose = dict(plane='xy', x=CIW / 2, y=T, z=-cz, flip=True)
 
 
 def part_json(p):
@@ -545,35 +759,61 @@ def part_json(p):
 
 
 # ---------------------------------------------------------------- build
-def build(style):
-    parts = [front_wedding() if style == 'wedding' else front_events(), back_panel(),
-             side_panel(1, cable=True), side_panel(2)] + plates() + [base_plate(style), ring_overlay(style)] + monitor_holders()
-    place_all(parts)
-    usage = check_sheet(parts)
+def placement_json(p):
+    return {'place': p.place, 'sheet': getattr(p, 'sheet', 0), 'sheet_outline': list(placed(p, p.outline).exterior.coords),
+            'cuts': [list(placed(p, circle(c[1], c[2], c[3], 32) if isinstance(c, tuple) else c).exterior.coords) for c in p.cuts],
+            'doors': [list(placed(p, d).exterior.coords) for d in p.doors],
+            'drills': [placed(p, ('circle', x, y, dd / 2))[1:] for x, y, dd in p.drills],
+            'pockets': [list(r) for pk in p.pockets for r in rings(placed(p, pk))],
+            'engrave': [placed(p, e) for e in p.engrave]}
+
+
+def build(style, printer='selphy'):
+    setup(printer)
+    front = front_wedding() if style == 'wedding' else front_events()
+    parts = [front, back_panel(), side_panel(1, cable=True), side_panel(2)] + plates()
+    if printer == 'selphy':
+        parts += [base_plate(style), ring_overlay(style)] + monitor_holders()
+        place_all(parts)
+        for p in parts:
+            p.sheet = 0
+    else:
+        parts += [ring_overlay(style)] + monitor_holders() + cabinet(style)
+        place_epson(parts)
     poses(parts)
-    out = os.path.join(HERE, style)
+    name = style if printer == 'selphy' else f'{style}-epson'
+    out = os.path.join(HERE, name)
     os.makedirs(out, exist_ok=True)
-    title = f'PHOTOBOOTH {style.upper()} TOTEM - 1 sheet MDF {int(T)} mm 1220x2440 - tool 6 mm'
-    dxf = os.path.join(out, f'photobooth-{style}-mdf{int(T)}mm.dxf')
-    write_dxf(parts, dxf, title)
+    sheets = []
+    for si in sorted({p.sheet for p in parts}):
+        sp = [p for p in parts if p.sheet == si]
+        usage = check_sheet(sp)
+        size = [SHEET_L, SHEET_W] if si == 0 else offcut_size(sp)
+        if si == 0:
+            fname = f'photobooth-{name}-mdf{int(T)}mm.dxf' if printer == 'selphy' else f'photobooth-{name}-mdf{int(T)}mm-sheet1.dxf'
+            title = f'PHOTOBOOTH {name.upper()} - sheet 1 - MDF {int(T)} mm 1220x2440 - tool 6 mm'
+        else:
+            fname = f'photobooth-{name}-mdf{int(T)}mm-sheet2-offcut.dxf'
+            title = f'PHOTOBOOTH {name.upper()} - sheet 2: offcut at least {int(size[1])} x {int(size[0])} mm - MDF {int(T)} mm'
+        write_dxf(sp, os.path.join(out, fname), title, size)
+        sheets.append({'file': fname, 'size': size, 'usage': round(usage, 3), 'parts': [p.key for p in sp]})
     meta = {
-        'style': style, 'thickness': T, 'sheet': [SHEET_L, SHEET_W], 'usage': round(usage, 3),
-        'tower': [W, D, H], 'base': [BASE_W, BASE_D], 'ring': RING, 'screen': SCREEN, 'printSlot': PRINT_SLOT,
-        'levels': LEVELS, 'layers': {k: v[1] for k, v in LAYERS.items()},
+        'style': style, 'printer': printer, 'name': name, 'thickness': T, 'sheet': [SHEET_L, SHEET_W], 'sheets': sheets,
+        'usage': sheets[0]['usage'], 'tower': [W, D, H], 'lift': LIFT, 'base': [BASE_W, BASE_D] if printer == 'selphy' else [CAB_W, CAB_D],
+        'cabinet': [CAB_W, CAB_D, CAB_H] if printer == 'epson' else None, 'epson': EPSON,
+        'ring': RING, 'screen': SCREEN, 'printSlot': PRINT_SLOT, 'levels': LEVELS,
+        'layers': {k: v[1] for k, v in LAYERS.items()},
         'parts': [part_json(p) for p in parts],
-        'placement': {p.key: {'place': p.place, 'sheet_outline': list(placed(p, p.outline).exterior.coords),
-                              'cuts': [list(placed(p, circle(c[1], c[2], c[3], 32) if isinstance(c, tuple) else c).exterior.coords) for c in p.cuts],
-                              'doors': [list(placed(p, d).exterior.coords) for d in p.doors],
-                              'drills': [placed(p, ('circle', x, y, dd / 2))[1:] for x, y, dd in p.drills],
-                              'pockets': [list(r) for pk in p.pockets for r in rings(placed(p, pk))],
-                              'engrave': [placed(p, e) for e in p.engrave]} for p in parts},
+        'placement': {p.key: placement_json(p) for p in parts},
     }
     with open(os.path.join(out, 'parts.json'), 'w') as f:
         json.dump(meta, f)
-    print(f'{style}: {len(parts)} parts, sheet usage {usage * 100:.0f}% → {os.path.relpath(dxf, ROOT)}')
+    desc = ' + '.join(f"sheet {i + 1} {int(sh['size'][1])}x{int(sh['size'][0])} ({sh['usage'] * 100:.0f}%)" for i, sh in enumerate(sheets))
+    print(f'{name}: {len(parts)} parts → {desc}')
     return meta
 
 
 if __name__ == '__main__':
-    for s in ('wedding', 'events'):
-        build(s)
+    for printer in ('selphy', 'epson'):
+        for s in ('wedding', 'events'):
+            build(s, printer)

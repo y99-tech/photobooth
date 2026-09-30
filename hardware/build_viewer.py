@@ -14,7 +14,8 @@ THREE_DIR = os.environ.get('THREE_DIR', os.path.join(HERE, '..', 'node_modules',
 
 def compact(meta):
     r = lambda pts: [[round(x, 1), round(y, 1)] for x, y in pts]  # noqa: E731
-    out = {k: meta[k] for k in ('style', 'thickness', 'sheet', 'usage', 'tower', 'base', 'ring', 'screen', 'printSlot')}
+    out = {k: meta.get(k) for k in ('style', 'printer', 'thickness', 'sheet', 'usage', 'tower', 'base', 'ring', 'screen', 'printSlot', 'lift', 'cabinet', 'epson')}
+    out['sheets'] = [{'size': sh['size'], 'usage': sh['usage']} for sh in meta['sheets']]
     out['parts'] = [{
         'key': p['key'], 'name': p['name'], 'size': p['size'], 'pose': p['pose'],
         'outline': r(p['outline']), 'holes': [r(h) for h in p['holes']], 'doors': [r(d) for d in p['doors']],
@@ -32,7 +33,7 @@ def data_url(path):
 
 
 def main():
-    data = {s: compact(json.load(open(os.path.join(HERE, s, 'parts.json')))) for s in ('wedding', 'events')}
+    data = {s: compact(json.load(open(os.path.join(HERE, s, 'parts.json')))) for s in ('wedding', 'events', 'wedding-epson', 'events-epson')}
     ui = {'wedding': data_url(os.environ.get('UI_WEDDING')), 'events': data_url(os.environ.get('UI_EVENTS'))}
     three = open(os.path.join(THREE_DIR, 'build/three.module.min.js')).read()
     orbit = open(os.path.join(THREE_DIR, 'examples/jsm/controls/OrbitControls.js')).read()
