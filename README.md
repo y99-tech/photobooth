@@ -29,6 +29,8 @@ A light but powerful photobooth for weddings and events.
 
 **Enjoying the photobooth?** [☕ Buy me a coffee via PayPal](https://www.paypal.com/donate/?business=mohamed2000youssry%40gmail.com&item_name=Buy+me+a+coffee+-+Photobooth&currency_code=USD). It keeps the project going. Thank you!
 
+**Build the booth itself:** CNC cut files for two photobooth enclosures (wedding and events), each cut from **one MDF sheet** (122 × 244 cm). See [`hardware/`](hardware/README.md).
+
 | Screen | URL |
 |---|---|
 | Booth (kiosk) | `http://localhost:8080/` |

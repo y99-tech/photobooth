@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photobooth Totem 3D</title>
+<style>
+  :root { --bg: #16130f; --panel: rgba(28,24,20,.86); --text: #f4efe6; --muted: #b3a998; --accent: #c9a36b; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, 'Segoe UI', Roboto, sans-serif; overflow: hidden; }
+  canvas { display: block; }
+  #ui { position: fixed; left: 16px; top: 16px; right: 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; pointer-events: none; }
+  #ui > * { pointer-events: auto; }
+  button { font: inherit; font-size: 14px; color: var(--text); background: var(--panel); border: 1px solid #3a332b; border-radius: 999px; padding: 9px 16px; cursor: pointer; }
+  button.on { background: var(--accent); color: #1b140b; border-color: var(--accent); font-weight: 600; }
+  #info { position: fixed; left: 16px; bottom: 16px; max-width: min(420px, calc(100vw - 32px)); background: var(--panel); border-radius: 14px; padding: 12px 14px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+  #info b { color: var(--text); }
+  body.shot #ui, body.shot #info { display: none; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <button data-d="wedding">💍 Wedding · زفاف</button>
+  <button data-d="events">🎉 Events · مناسبات</button>
+  <span style="width:8px"></span>
+  <button id="explode">🧩 Exploded view</button>
+  <button id="spin">↻ Rotate</button>
+</div>
+<div id="info"></div>
+<script id="three-src" type="text/plain">/*THREE*/</script>
+<script id="orbit-src" type="text/plain">/*ORBIT*/</script>
+<script>window.DATA = /*DATA*/; window.UI_IMG = /*UIIMG*/;</script>
+<script type="module">
+// three.js is embedded above so this file works offline, e-mailed or on a USB stick.
+const blobUrl = (code) => URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+const threeUrl = blobUrl(document.getElementById('three-src').textContent);
+const THREE = await import(threeUrl);
+const { OrbitControls } = await import(blobUrl(document.getElementById('orbit-src').textContent.replace(/from\s*['"]three['"]/g, `from '${threeUrl}'`)));
+
+const q = new URLSearchParams(location.search);
+if (q.has('shot')) document.body.classList.add('shot');
+const T = 18;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(32, 1, 10, 20000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 900, 0);
+controls.enableDamping = true;
+
+// Lights & floor
+scene.add(new THREE.HemisphereLight(0xfff5e8, 0x2a2420, 0.9));
+const key = new THREE.DirectionalLight(0xffffff, 2.2);
+key.position.set(1400, 2600, 2200);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -1500, right: 1500, top: 2500, bottom: -500, near: 100, far: 8000 });
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xffe2c0, 0.6);
+fill.position.set(-2000, 1200, 1000);
+scene.add(fill);
+const floor = new THREE.Mesh(new THREE.CircleGeometry(2600, 64), new THREE.MeshStandardMaterial({ color: 0x3a332c, roughness: 0.95 }));
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -40;
+floor.receiveShadow = true;
+scene.add(floor);
+
+const STYLE = {
+  wedding: { body: 0xf3ede3, trim: 0xd4af37, engrave: 0xb88a3e, glow: 0xffd89a, bg: 0x1d1813, name: 'Wedding — Moorish arch totem', ar: 'تصميم الزفاف — قوس مغربي' },
+  events: { body: 0x17171a, trim: 0x232328, engrave: 0xeaeaea, glow: 0xff3ea5, glow2: 0x33e1ff, bg: 0x0d0d12, name: 'Events — Neon totem', ar: 'تصميم المناسبات — نيون' }
+};
+
+let group = null, design = q.get('design') || 'wedding', exploded = q.get('exploded') === '1', spin = false;
+const uiTex = {};
+for (const k of Object.keys(window.UI_IMG)) {
+  uiTex[k] = new THREE.TextureLoader().load(window.UI_IMG[k]);
+  uiTex[k].colorSpace = THREE.SRGBColorSpace;
+}
+
+function shapeOf(outline, holes) {
+  const s = new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x, y)));
+  for (const h of holes || []) s.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y))));
+  return s;
+}
+
+// local (x, y, z=0..T) → world, per placement
+function matrixFor(pose) {
+  const m = new THREE.Matrix4();
+  const { plane, x, y, z } = pose;
+  if (plane === 'xy' && pose.rot90) m.set(0, 1, 0, x, 1, 0, 0, y, 0, 0, 1, z, 0, 0, 0, 1);
+  else if (plane === 'xy' && pose.flip) m.set(-1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z, 0, 0, 0, 1);
+  else if (plane === 'xy') m.set(1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z, 0, 0, 0, 1);
+  else if (plane === 'zy') m.set(0, 0, 1, x, 0, 1, 0, y, -1, 0, 0, z, 0, 0, 0, 1);
+  else if (plane === 'xz') m.set(1, 0, 0, x, 0, 0, 1, y, 0, -1, 0, z, 0, 0, 0, 1);
+  return m;
+}
+
+// Exploded view: push every part out along its face normal
+const EXPLODE = { front: [0, 0, 380], back: [0, 0, -380], side1: [-320, 0, 0], side2: [320, 0, 0], ring: [0, 0, 560], base: [0, -300, 0], top: [0, 260, 0], bottom: [0, -120, 0], printer: [0, 0, 0], camera: [0, 0, 0], rail1: [0, 0, 180], rail2: [0, 0, 180], bar1: [0, 0, 60], bar2: [0, 0, 60] };
+
+function build() {
+  if (group) scene.remove(group);
+  group = new THREE.Group();
+  const st = STYLE[design];
+  scene.background = new THREE.Color(st.bg);
+  const data = window.DATA[design];
+  const mdf = (c, rough = 0.6) => new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: 0, side: THREE.DoubleSide });
+  for (const p of data.parts) {
+    if (!p.pose) continue;
+    const geo = new THREE.ExtrudeGeometry(shapeOf(p.outline, p.holes), { depth: T, bevelEnabled: false, curveSegments: 12 });
+    const isTrim = p.key === 'ring';
+    const mat = isTrim ? new THREE.MeshStandardMaterial({ color: st.trim, roughness: design === 'wedding' ? 0.35 : 0.5, metalness: design === 'wedding' ? 0.6 : 0.1, side: THREE.DoubleSide }) : mdf(st.body);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = mesh.receiveShadow = true;
+    const holder = new THREE.Group();
+    holder.add(mesh);
+    // Decorations drawn on the outer face (z = T)
+    const faceZ = p.pose.flip ? T + 0.4 : T + 0.4;
+    const lineMat = new THREE.LineBasicMaterial({ color: st.engrave });
+    for (const e of p.engrave || []) {
+      const g = new THREE.BufferGeometry().setFromPoints(e.map(([x, y]) => new THREE.Vector3(x, y, faceZ)));
+      holder.add(new THREE.Line(g, lineMat));
+    }
+    for (const d of p.doors || []) {
+      const g = new THREE.BufferGeometry().setFromPoints(d.map(([x, y]) => new THREE.Vector3(x, y, -0.5)));
+      holder.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0x555555 })));
+      const g2 = new THREE.BufferGeometry().setFromPoints(d.map(([x, y]) => new THREE.Vector3(x, y, T + 0.5)));
+      holder.add(new THREE.Line(g2, new THREE.LineBasicMaterial({ color: 0x555555 })));
+    }
+    for (const pk of p.pockets || []) {  // LED channels glowing
+      const g = new THREE.ShapeGeometry(shapeOf(pk.outer, pk.holes));
+      const glow = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: p.key === 'base' ? st.glow2 || st.glow : st.glow }));
+      glow.position.z = T + 0.3;
+      holder.add(glow);
+    }
+    holder.applyMatrix4(matrixFor(p.pose));
+    const ex = exploded ? EXPLODE[p.key] || [0, 0, 0] : [0, 0, 0];
+    holder.position.add(new THREE.Vector3(...ex));
+    group.add(holder);
+  }
+  // ---- equipment mock-ups (screen, ring light, camera, backlight) ----
+  const W = data.tower[0], D = data.tower[1];
+  const zf = D / 2, ox = -W / 2;
+  const dz = exploded ? 380 : 0;
+  const s = data.screen;
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(s.w + 20, s.h + 20), new THREE.MeshBasicMaterial({ map: uiTex[design] }));
+  scr.position.set(ox + s.x0 + s.w / 2, s.y0 + s.h / 2, zf - T - 6 + dz);
+  group.add(scr);
+  const r = data.ring;
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(108, 18, 16, 64), new THREE.MeshBasicMaterial({ color: 0xfffaf0 }));
+  ring.position.set(ox + r.cx, r.cy, zf - T - 14 + dz);
+  group.add(ring);
+  const lens = new THREE.Mesh(new THREE.CylinderGeometry(34, 38, 90, 32), new THREE.MeshStandardMaterial({ color: 0x0b0b0b, roughness: 0.3, metalness: 0.5 }));
+  lens.rotation.x = Math.PI / 2;
+  lens.position.set(ox + r.cx, r.cy, zf - T - 60 + dz);
+  group.add(lens);
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0x223344, roughness: 0.05, metalness: 0.9 });
+  const glass = new THREE.Mesh(new THREE.CircleGeometry(22, 32), glassMat);
+  glass.position.set(ox + r.cx, r.cy, zf - T - 14 + dz);
+  group.add(glass);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(W - 2 * T, 1000), new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 1 }));
+  back.position.set(0, 1100, -zf + T + 2);
+  group.add(back);
+  // Backlight (LED + frosted acrylic) seen only through the cut-out hearts / SMILE letters
+  const front = data.parts.find((p) => p.key === 'front');
+  const glowMat = new THREE.MeshBasicMaterial({ color: st.glow, side: THREE.DoubleSide });
+  for (const h of front.holes) {
+    const cy = h.reduce((a, pt) => a + pt[1], 0) / h.length;
+    if (cy < 1600) continue;
+    const g = new THREE.Mesh(new THREE.ShapeGeometry(shapeOf(h, [])), glowMat);
+    g.position.set(ox, 0, zf - T + 2 + dz);
+    group.add(g);
+  }
+  // Print slot shadow
+  const ps = data.printSlot;
+  const slot = new THREE.Mesh(new THREE.PlaneGeometry(ps.w, ps.h), new THREE.MeshBasicMaterial({ color: 0x050505 }));
+  slot.position.set(ox + ps.x0 + ps.w / 2, ps.y0 + ps.h / 2, zf - T - 4 + dz);
+  group.add(slot);
+  scene.add(group);
+  document.querySelectorAll('[data-d]').forEach((b) => b.classList.toggle('on', b.dataset.d === design));
+  document.getElementById('explode').classList.toggle('on', exploded);
+  const h = data.parts.find((p) => p.key === 'front').size[1];
+  document.getElementById('info').innerHTML =
+    `<b>${st.name}</b> · <span dir="rtl">${st.ar}</span><br>` +
+    `${data.parts.length} parts · one ${data.sheet[1]} × ${data.sheet[0]} mm MDF sheet (${data.thickness} mm) · ${Math.round(data.usage * 100)}% of the sheet used<br>` +
+    `Tower ${W} × ${D} mm, ${h + T} mm tall on a ${data.base[0]} × ${data.base[1]} mm base · drag to rotate, scroll to zoom`;
+}
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+const views = { front: [1500, 1350, 3900], side: [3600, 1300, 1200], back: [-1600, 1300, -3600], top: [1200, 3600, 2600] };
+camera.position.set(...(views[q.get('view')] || views.front));
+controls.update();
+
+document.querySelectorAll('[data-d]').forEach((b) => (b.onclick = () => { design = b.dataset.d; build(); }));
+document.getElementById('explode').onclick = () => { exploded = !exploded; build(); };
+document.getElementById('spin').onclick = (e) => { spin = !spin; e.target.classList.toggle('on', spin); };
+build();
+(function loop() {
+  if (spin) {
+    const a = 0.004, p = camera.position, t = controls.target;
+    const x = p.x - t.x, z = p.z - t.z;
+    p.x = t.x + x * Math.cos(a) - z * Math.sin(a);
+    p.z = t.z + x * Math.sin(a) + z * Math.cos(a);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+})();
+window.READY = true;
+</script>
+</body>
+</html>
