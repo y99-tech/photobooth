@@ -1,27 +1,27 @@
 # 📐 Photobooth totem — CNC cut from ONE MDF sheet
 
-Two photobooth enclosure designs, each with an optional Epson printer edition (below). The standard designs are each cut completely from **one standard MDF sheet as sold in Egypt (122 × 244 cm, 18 mm)** on a CNC router with a 6 mm bit.
+Two photobooth enclosure designs, each with an Epson printer edition (below). Every version is cut completely from **one standard MDF sheet as sold in Egypt (122 × 244 cm, 18 mm)** on a CNC router with a 6 mm bit.
 
 | 💍 Wedding — Moorish arch | 🎉 Events — Neon |
 |---|---|
 | ![Wedding](images/wedding-front.png) | ![Events](images/events-front.png) |
 | Ogee arch crest, backlit heart cut-outs, gold engraved double border, heart speaker grille, scalloped camera rosette, engraved **"ألف مبروك"** and **"Just Married"**, scalloped base | "SMILE" letters cut through and backlit, 17 mm LED channels around the whole front, hexagon speaker grille, engraved **"ابتسم"** and **"PHOTO BOOTH"**, glowing base edge |
 
-## 🖨️ Epson edition: for the Epson L8050 / L805
+## 🖨️ Epson edition: for the Epson L8050, still ONE sheet
 
 | 💍 Wedding + Epson | 🎉 Events + Epson |
 |---|---|
 | ![Wedding Epson](images/wedding-epson-front.png) | ![Events Epson](images/events-epson-front.png) |
 
-The famous Epson ink-tank photo printers are too wide for the slim tower: the L8050 is about 418 mm and the L805 about 542 mm, while the tower is 324 mm inside. In this edition the printer goes in a matching **printer cabinet (60 × 42 × 37 cm)** that replaces the base, and the tower bolts on top of it.
+The famous Epson L8050 ink-tank photo printer (418 mm wide) doesn't fit inside the slim tower (324 mm inside). In this edition it goes in a matching **printer cabinet (54 × 38 × 37 cm)** that replaces the base, and the tower bolts on top of it. **The whole booth is still cut from one MDF sheet** (87–88% used):
 
-- **Same height:** the tower is shortened to 1.23 m, so the camera is still at 1.42 m and the whole booth is the same height.
+- **The cabinet top is the tower floor.** Four steel L-brackets in the tower's bottom corners bolt through it with M8 bolts and wing nuts. A big opening lets cables and warm air pass between the tower and the cabinet.
+- **Open back** with one stretcher rail at the top. Paper, ink, cables, the PC and the ballast are all reached from behind, with no doors to hang, and the heat from the printer and PC gets out.
+- **Nothing is wasted from the windows:** the monitor clamp bars are cut from the screen-window slug, and the monitor rails from the print-window slug (layer `CUT_NESTED`).
+- **Same height:** the tower is 1.23 m, so the camera is still at 1.42 m and the booth is as tall as the SELPHY edition.
 - **Front:** a wide print window. Wedding has an arch with "خذ صورتك · Your photo"; events has a neon LED channel with "PRINTS · الصور".
-- **Back and sides:** a big back door for loading paper or taking the printer out, a side door for refilling the ink tanks, vents, and handles on both sides.
-- **Tower:** no print slot or printer shelf; one tall service door.
-- **Material:** the cabinet needs more wood, so this edition takes **one full sheet plus a small offcut strip**: about 116 × 35 cm for wedding and 108 × 35 cm for events. Workshops usually have offcuts like this, or you can buy a quarter sheet. There are two DXF files, `…-sheet1.dxf` and `…-sheet2-offcut.dxf`.
 
-> Measure your printer with its trays open before cutting. If it's different, change `EPSON`, `CAB_W`, `CAB_D` and `CAB_H` at the top of `generate.py`.
+> Measure your printer with its trays open before cutting. The older **L805** is 542 mm wide and needs `CAB_W = 600` in `generate.py`; then it no longer fits on one sheet, and the generator puts the overflow on a small second offcut automatically.
 
 ## What to send to the CNC workshop
 
@@ -29,8 +29,8 @@ The famous Epson ink-tank photo printers are too wide for the slim tower: the L8
 |---|---|
 | `wedding/photobooth-wedding-mdf18mm.dxf` | Cut file for the wedding design: the whole sheet, 1:1 in mm |
 | `events/photobooth-events-mdf18mm.dxf` | Cut file for the events design |
-| `wedding-epson/…-sheet1.dxf` + `…-sheet2-offcut.dxf` | Wedding, Epson edition: the full sheet plus the offcut strip |
-| `events-epson/…-sheet1.dxf` + `…-sheet2-offcut.dxf` | Events, Epson edition |
+| `wedding-epson/photobooth-wedding-epson-mdf18mm.dxf` | Wedding, Epson edition (one sheet) |
+| `events-epson/photobooth-events-epson-mdf18mm.dxf` | Events, Epson edition (one sheet) |
 | `photobooth-cnc-guide.pdf` | A3 guide: renders, cutting layouts, dimensioned drawings, parts list, hardware list and an **Arabic page for the CNC operator** |
 | `photobooth-3d-viewer.html` | Interactive 3D model with both designs, a SELPHY / Epson switch and an exploded view. Open it in any browser; it works offline. |
 | `*/sheet-layout.svg` / `.png`, `*/front-drawing.png` | Previews |
@@ -43,6 +43,7 @@ The famous Epson ink-tank photo printers are too wide for the slim tower: the L8
 | `POCKET_8` | 8 mm deep pocket for LED channels (events design) |
 | `DRILL_7` | 7 mm through (confirmat screws) |
 | `DRILL_10` | 10 mm through (M8 T-nuts, bolts, levelling feet) |
+| `CUT_NESTED` | Epson editions: small parts sitting inside a window. Through cut, outside the line, with tabs. Do this **before** `CUT_INSIDE`. |
 | `CUT_INSIDE` | Through cut, inside the line (windows, holes, hearts, letters) |
 | `CUT_DOOR` | Through cut **on** the line. The loose piece becomes the service door. |
 | `CUT_OUTSIDE` | Through cut, outside the line, with tabs. Do this last. |
@@ -98,13 +99,14 @@ npm install three@0.160.0 && python3 hardware/build_viewer.py   # 3D viewer
   1. الحفر `ENGRAVE_V`
   2. الجيوب `POCKET_8`
   3. التخريم `DRILL_7` و `DRILL_10`
-  4. القص الداخلي `CUT_INSIDE`
-  5. الأبواب `CUT_DOOR`، على الخط، والقطعة الخارجة هي الباب
-  6. القص الخارجي `CUT_OUTSIDE` في النهاية مع تابات
-- **نسخة طابعة إبسون (L8050 / L805):**
-  - الطابعة أعرض من البرج، فبتتحط في دولاب 60 × 42 × 37 سم تحت البرج.
+  4. القطع الصغيرة اللي جوه الشبابيك `CUT_NESTED` (نسخ إبسون فقط)
+  5. القص الداخلي `CUT_INSIDE`
+  6. الأبواب `CUT_DOOR`، على الخط، والقطعة الخارجة هي الباب
+  7. القص الخارجي `CUT_OUTSIDE` في النهاية مع تابات
+- **نسخة طابعة إبسون (L8050):**
+  - الطابعة أعرض من البرج، فبتتحط في دولاب 54 × 38 × 37 سم تحت البرج.
   - ارتفاع الكاميرا زي ما هو 1.42 م.
-  - تحتاج لوح كامل وشريحة بواقي، حوالي 116 × 35 سم للزفاف و 108 × 35 سم للمناسبات.
-  - فيه ملفين: `sheet1` و `sheet2-offcut`.
+  - مجاري ومشابك الشاشة بتتقص من جوه الشبابيك (طبقة `CUT_NESTED`)، فاقطعها قبل القص الداخلي.
+  - برضه كله من لوح واحد: سطح الدولاب هو أرضية البرج، والظهر مفتوح بعارضة واحدة.
 - **قبل القص:** تأكد من مقاس الشاشة (15.6 بوصة رأسية) والرينج لايت (10 بوصة). لو مختلفة، عدّل المقاسات في أول ملف `generate.py`.
 - **التفاصيل:** كل التفاصيل وقائمة الخامات بالعربي موجودة في آخر صفحة من ملف `photobooth-cnc-guide.pdf`.

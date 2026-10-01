@@ -37,11 +37,12 @@ except Exception as e:  # pragma: no cover
     print('Arabic font not available:', e)
 
 COL = {
-    'CUT_OUTSIDE': '#d62828', 'CUT_INSIDE': '#1d4ed8', 'CUT_DOOR': '#c026d3', 'DRILL_7': '#16a34a',
+    'CUT_OUTSIDE': '#d62828', 'CUT_NESTED': '#0d9488', 'CUT_INSIDE': '#1d4ed8', 'CUT_DOOR': '#c026d3', 'DRILL_7': '#16a34a',
     'DRILL_10': '#0891b2', 'POCKET_8': '#f97316', 'ENGRAVE_V': '#b8860b',
 }
 AR_OPS = {
     'CUT_OUTSIDE': 'قص خارجي كامل (خارج الخط) — مع تابات',
+    'CUT_NESTED': 'قطع صغيرة داخل شباك: قص خارج الخط قبل القص الداخلي',
     'CUT_INSIDE': 'قص داخلي كامل (داخل الخط): شبابيك وفتحات وحروف',
     'CUT_DOOR': 'قص على الخط: القطعة الناتجة هي الباب',
     'DRILL_7': 'تخريم 7 مم نافذ (مسامير كونفرمات)',
@@ -79,9 +80,13 @@ def draw_sheet(ax, meta, numbers=True):
         dim(ax, (ox - 18, 0), (ox - 18, Wd), f'{int(Wd)} mm', vertical=True)
         if k:
             ax.text(ox + L / 2, Wd + 18, f'SHEET {k + 1}: offcut\nلوح {k + 1}: بواقي', ha='center', va='bottom', fontsize=8, fontweight='bold')
-    for i, p in enumerate(meta['parts'], 1):
+    order = sorted(enumerate(meta['parts'], 1), key=lambda ip: bool(meta['placement'][ip[1]['key']].get('nested')))  # nested parts on top
+    for i, p in order:
         pl = shift(meta['placement'][p['key']], offs[meta['placement'][p['key']].get('sheet', 0)])
-        closed(ax, pl['sheet_outline'], COL['CUT_OUTSIDE'], 1.1, fill=MDF)
+        if pl.get('nested'):
+            closed(ax, pl['sheet_outline'], COL['CUT_NESTED'], 1.1, fill=MDF, z=3)
+        else:
+            closed(ax, pl['sheet_outline'], COL['CUT_OUTSIDE'], 1.1, fill=MDF)
         for c in pl['cuts']:
             closed(ax, c, COL['CUT_INSIDE'], 0.7, fill='#f7f3ea', z=3)
         for d in pl['doors']:
@@ -190,7 +195,8 @@ def front_drawing(meta, fig):
         bx0, bx1 = sx - (cd - D) / 2, sx + D + (cd - D) / 2
         closed(ax, [(bx0, 0), (bx1, 0), (bx1, T), (bx0, T)], '#222', 0.8, fill=MDF)                # cabinet bottom
         closed(ax, [(bx0, ch - T), (bx1, ch - T), (bx1, ch), (bx0, ch)], '#222', 0.8, fill=MDF)    # cabinet top
-        closed(ax, [(bx0, T), (bx0 + T, T), (bx0 + T, ch - T), (bx0, ch - T)], '#222', 0.8, fill=MDF)  # cabinet back
+        rh = P['cab_rail']['size'][1]
+        closed(ax, [(bx0, ch - T - rh), (bx0 + T, ch - T - rh), (bx0 + T, ch - T), (bx0, ch - T)], '#222', 0.8, fill=MDF)  # back rail (open back)
         closed(ax, [(bx1 - T, T), (bx1, T), (bx1, ch - T), (bx1 - T, ch - T)], '#222', 0.8, fill=MDF)  # cabinet front
         ep = meta['epson']
         px1 = bx1 - T - 20
@@ -220,9 +226,12 @@ def front_drawing(meta, fig):
         cw, cd, ch = cab
         c0 = bx + (W - cw) / 2
         closed(ax, [(c0, 0), (c0 + cw, 0), (c0 + cw, ch), (c0, ch)], '#222', 0.9, fill=MDF)
-        part_local(ax, P['cab_back'], ox=bx + (W - P['cab_back']['size'][0]) / 2, oy=T)
+        rail = P['cab_rail']
+        oh = ch - T - rail['size'][1]
+        closed(ax, [(c0 + T, T), (c0 + cw - T, T), (c0 + cw - T, oh), (c0 + T, oh)], '#222', 0.6, fill='#3a3a3a', z=3)
+        part_local(ax, rail, ox=bx + (W - rail['size'][0]) / 2, oy=ch - T - rail['size'][1])
         ax.text(bx + W / 2, lift + H / 2, 'door\nالباب', ha='center', fontsize=7, color=COL['CUT_DOOR'])
-        ax.text(bx + W / 2, ch / 2, 'printer door\nباب الطابعة', ha='center', fontsize=7, color=COL['CUT_DOOR'])
+        ax.text(bx + W / 2, (ch - rail['size'][1]) / 2, 'open back\nظهر مفتوح', ha='center', fontsize=7, color='white', zorder=6)
     else:
         ax.text(bx + W / 2, 850, 'upper door\nالباب العلوي', ha='center', fontsize=7, color=COL['CUT_DOOR'])
         ax.text(bx + W / 2, 250, 'lower door\nالباب السفلي', ha='center', fontsize=7, color=COL['CUT_DOOR'])
@@ -327,42 +336,38 @@ def page_cover(pdf):
 
 def page_epson(pdf, metas):
     fig = plt.figure(figsize=(16.54, 11.69))
-    fig.text(0.5, 0.94, 'Epson edition — for the Epson L8050 / L805 photo printer', fontsize=24, fontweight='bold', ha='center')
-    fig.text(0.5, 0.9, 'نسخة طابعة إبسون L8050 / L805 — الطابعة في دولاب تحت البرج', fontsize=19, ha='center')
+    fig.text(0.5, 0.94, 'Epson edition — for the Epson L8050 photo printer', fontsize=24, fontweight='bold', ha='center')
+    fig.text(0.5, 0.9, 'نسخة طابعة إبسون L8050 — الطابعة في دولاب تحت البرج، ومن لوح واحد', fontsize=19, ha='center')
     for i, m in enumerate(metas):
         ax = fig.add_axes([0.02 + i * 0.3, 0.13, 0.28, 0.74])
         image(ax, os.path.join(IMG, f'{name(m)}-front.png'))
-        off = m['sheets'][1]['size']
         fig.text(0.16 + i * 0.3, 0.11, TITLE[name(m)][0] + '  ·  ' + TITLE[name(m)][1], fontsize=11, ha='center', fontweight='bold')
-        fig.text(0.16 + i * 0.3, 0.085, f'1 sheet + offcut {int(max(off))} × {int(min(off))} mm', fontsize=10, ha='center', color='#444')
+        fig.text(0.16 + i * 0.3, 0.085, sheet_text(m).split(',')[0] + f" · {round(m['usage'] * 100)}% used", fontsize=10, ha='center', color='#444')
     m = metas[0]
     cw, cd, ch = m['cabinet']
     ep = m['epson']
     lines = [
         ('Why a cabinet?', True),
-        (f"The Epson L8050 is {int(ep['w'])} mm wide (the L805 about 542 mm).", False),
-        (f"The tower is only 324 mm wide inside, so the printer", False),
-        (f"lives in a {int(cw)} × {int(cd)} × {int(ch)} mm cabinet that", False),
-        ('replaces the base. The tower bolts on top of it.', False),
+        (f"The Epson L8050 is {int(ep['w'])} mm wide, the tower only 324 mm inside.", False),
+        (f"So the printer lives in a {int(cw)} × {int(cd)} × {int(ch)} mm cabinet that", False),
+        ('replaces the base, and the tower bolts on top of it.', False),
         ('', False),
-        ('What changes', True),
-        (f"• Tower is shorter ({int(m['tower'][2])} mm) so the camera", False),
-        (f"  stays at {int(m['lift'] + m['ring']['cy'])} mm and the total height is the same.", False),
-        ('• No print slot and no printer shelf in the tower.', False),
-        ('• Wide print window in the cabinet front.', False),
-        ('• Big back door to load paper and swap the printer,', False),
-        ('  side door for refilling the ink tanks, vents.', False),
-        ('• Needs the full sheet + one small offcut strip', False),
-        ('  (most workshops have one; or buy a ¼ sheet).', False),
+        ('Still ONE MDF sheet', True),
+        ('• The cabinet top is the tower floor (4 L-brackets + M8 bolts).', False),
+        ('• Open back with one stretcher rail: paper, ink, cables and', False),
+        ('  the PC are reached from behind, and the heat gets out.', False),
+        ('• Monitor clamp bars are cut from the screen-window slug and', False),
+        ('  the monitor rails from the print-window slug (CUT_NESTED).', False),
+        (f"• Tower is shorter ({int(m['tower'][2])} mm): the camera stays at {int(m['lift'] + m['ring']['cy'])} mm", False),
+        ('  and the booth is as tall as the SELPHY edition.', False),
         ('', False),
         ('Check the printer before cutting!', True),
-        ('Measure your printer with its trays open. Change', False),
-        ("EPSON / CAB_W / CAB_D / CAB_H in generate.py.", False),
+        ('Measure it with the trays open. The older L805 (542 mm wide)', False),
+        ('needs CAB_W = 600 in generate.py (then it no longer fits one sheet).', False),
         ('', False),
         ('ليه دولاب؟', True),
-        ('عرض الطابعة أكبر من عرض البرج، فبنحطها في دولاب', False),
-        ('تحت البرج بنفس ارتفاع الكاميرا. يحتاج لوح كامل', False),
-        ('وشريحة بواقي صغيرة. قيس الطابعة قبل القص.', False),
+        ('الطابعة أعرض من البرج، فبتتحط في دولاب تحت البرج', False),
+        ('وكل البوث لسه من لوح MDF واحد. قيس الطابعة قبل القص.', False),
     ]
     y = 0.84
     for t, b in lines:
@@ -386,18 +391,18 @@ HARDWARE = [
     ('Frosted acrylic 3 mm + 12 V LED strip (light box behind crest / SMILE)', 'أكريليك لبني 3 مم + شريط LED 12 فولت (خلف القوس / كلمة SMILE)', '1 + 1–2 m'),
     ('Events: 17 mm aluminium LED profile + 5 m LED strip + 12 V 3 A adapter', 'المناسبات: بروفيل ألومنيوم 17 مم + 5 م شريط LED + محول 12 فولت 3 أمبير', '1 set'),
     ('Ballast 10 kg (sand bag / tiles) in the bottom compartment', 'ثقل 10 كجم (شيكارة رمل) في الدرج السفلي', '1'),
-    ('Epson edition: MDF offcut strip ≈ 116 × 35 cm + 3 more hinges & magnets', 'نسخة إبسون: شريحة بواقي ≈ 116×35 سم + 3 مفصلات ومغناطيس زيادة', '1'),
+    ('Epson edition: 4 steel L-brackets 40 mm + M8 × 40 bolts + wing nuts (tower → cabinet)', 'نسخة إبسون: 4 زوايا حديد 40 مم + مسامير M8×40 + صواميل فراشة (البرج على الدولاب)', '4'),
 ]
 ELECTRONICS = [
     ('15.6″ portable touch monitor (portrait, ≤ 225 × 357 mm body)', 'شاشة لمس محمولة 15.6 بوصة (رأسية)'),
     ('10″ (26 cm) ring light', 'رينج لايت 10 بوصة (26 سم)'),
     ('DSLR / mirrorless or 1080p webcam', 'كاميرا DSLR أو ويب كام 1080p'),
     ('Mini PC (Windows 11) or Raspberry Pi 5', 'ميني PC (ويندوز 11) أو راسبيري باي 5'),
-    ('Canon SELPHY CP1500, or Epson L8050 / L805 (Epson edition)', 'طابعة كانون سيلفي CP1500 أو إبسون L8050 / L805'),
+    ('Canon SELPHY CP1500, or Epson L8050 (Epson edition)', 'طابعة كانون سيلفي CP1500 أو إبسون L8050'),
     ('Power strip, USB speaker, cables', 'مشترك كهرباء، سماعة USB، كابلات'),
 ]
 STEPS = [
-    'Cut: engrave → pockets → drills → inside cuts → door cuts → outside cuts (tabs on small parts).',
+    'Cut: engrave → pockets → drills → nested parts → inside cuts → door cuts → outside cuts (tabs on small parts).',
     'Sand, seal MDF edges with filler/primer (edges drink paint), then paint. Gold-paint the engraving & rosette (wedding).',
     'Glue the two monitor rails behind the front panel, either side of the screen window.',
     'Box: screw the 4 plates (floor, printer, camera, top) between the side panels with confirmat screws (Ø7 holes).',
@@ -408,8 +413,8 @@ STEPS = [
     'Mount ring light behind the round hole, camera on the camera shelf (¼″ screw through the slot), monitor into the window '
     '(clamp bars + foam), printer on its shelf in line with the slot, PC + power strip + 10 kg ballast in the bottom.',
     'LED strip + frosted acrylic light box behind the crest hearts / SMILE letters. Cables exit through the side hole.',
-    'Epson edition: build the cabinet box (top, bottom, sides, front, back) with confirmat, bolt the tower onto the cabinet '
-    'top, printer inside facing the print window, hang the back and ink doors. The PC can sit in the cabinet too.',
+    'Epson edition: cabinet = top, bottom, 2 sides, front and back rail (confirmat). Screw 4 L-brackets into the tower\'s '
+    'bottom corners and bolt them through the cabinet top (wing nuts from the open back). Printer faces the window; PC + ballast beside it.',
 ]
 
 
@@ -455,7 +460,7 @@ AR_PAGE = [
     ('ترتيب العمليات', [
         'أولًا: حفر الزخارف والكتابة بسكينة V بزاوية 60 أو 90 درجة وعمق 3 مم — طبقة ENGRAVE_V',
         'ثانيًا: تفريغ مجاري شريط LED بعمق 8 مم (تصميم المناسبات فقط) — طبقة POCKET_8',
-        'ثالثًا: التخريم النافذ — طبقتا DRILL_7 و DRILL_10',
+        'ثالثًا: التخريم النافذ — طبقتا DRILL_7 و DRILL_10، ثم القطع الصغيرة اللي جوه الشبابيك — طبقة CUT_NESTED (قبل القص الداخلي)',
         'رابعًا: القص الداخلي داخل الخط (الشبابيك والفتحات والقلوب وحروف SMILE) — طبقة CUT_INSIDE',
         'خامسًا: قص الأبواب على الخط، والقطعة الخارجة من الظهر هي الباب نفسه — طبقة CUT_DOOR',
         'سادسًا: القص الخارجي لكل القطع خارج الخط كآخر عملية — طبقة CUT_OUTSIDE',
@@ -466,10 +471,10 @@ AR_PAGE = [
         'لو المقاسات مختلفة عدّلها في أول ملف generate.py ثم أعد توليد الملفات',
         'راجع أن لوح الـ MDF مستوٍ وثبّته جيدًا بالشفط أو بالمسامير خارج أماكن القطع',
     ]),
-    ('نسخة طابعة إبسون L8050 / L805', [
-        'الطابعة أعرض من البرج، لذلك توضع في دولاب 60 × 42 × 37 سم تحت البرج بدل القاعدة، والبرج أقصر ليفضل ارتفاع الكاميرا 1.42 م',
-        'تحتاج لوح كامل + شريحة بواقي صغيرة (حوالي 116 × 35 سم للزفاف و 108 × 35 سم للمناسبات) — ملفين DXF: sheet1 و sheet2-offcut',
-        'قيس الطابعة والأدراج مفتوحة قبل القص، وعدّل المقاسات في generate.py لو مختلفة',
+    ('نسخة طابعة إبسون L8050', [
+        'الطابعة أعرض من البرج، لذلك توضع في دولاب 54 × 38 × 37 سم تحت البرج بدل القاعدة، والبرج أقصر ليفضل ارتفاع الكاميرا 1.42 م',
+        'كلها من لوح واحد: سطح الدولاب هو أرضية البرج، والظهر مفتوح بعارضة واحدة، ومجاري ومشابك الشاشة تتقص من داخل الشبابيك',
+        'قيس الطابعة والأدراج مفتوحة قبل القص. طابعة L805 القديمة (عرض 54 سم) محتاجة دولاب أعرض ولوح بواقي زيادة',
     ]),
     ('التجميع باختصار', [
         'الأرفف الأربعة بين الجانبين بمسامير كونفرمات، ثم الظهر، ثم الواجهة من الداخل بزوايا حديد (بدون مسامير ظاهرة)',

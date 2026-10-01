@@ -23,7 +23,7 @@
   <button data-d="events">🎉 Events · مناسبات</button>
   <span style="width:8px"></span>
   <button data-p="selphy">🖨️ Canon SELPHY · 1 sheet</button>
-  <button data-p="epson">🖨️ Epson L8050 / L805</button>
+  <button data-p="epson">🖨️ Epson L8050</button>
   <span style="width:8px"></span>
   <button id="explode">🧩 Exploded view</button>
   <button id="spin">↻ Rotate</button>
@@ -103,7 +103,7 @@ function matrixFor(pose) {
 }
 
 // Exploded view: push every part out along its face normal
-const EXPLODE = { cab_front: [0, 0, 300], cab_back: [0, 0, -300], cab_side1: [-380, 0, 0], cab_side2: [380, 0, 0], cab_bottom: [0, -200, 0], cab_top: [0, 80, 0], front: [0, 0, 380], back: [0, 0, -380], side1: [-320, 0, 0], side2: [320, 0, 0], ring: [0, 0, 560], base: [0, -300, 0], top: [0, 260, 0], bottom: [0, -120, 0], printer: [0, 0, 0], camera: [0, 0, 0], rail1: [0, 0, 180], rail2: [0, 0, 180], bar1: [0, 0, 60], bar2: [0, 0, 60] };
+const EXPLODE = { cab_front: [0, 0, 300], cab_rail: [0, 60, -300], cab_side1: [-380, 0, 0], cab_side2: [380, 0, 0], cab_bottom: [0, -200, 0], cab_top: [0, 80, 0], front: [0, 0, 380], back: [0, 0, -380], side1: [-320, 0, 0], side2: [320, 0, 0], ring: [0, 0, 560], base: [0, -300, 0], top: [0, 260, 0], bottom: [0, -120, 0], printer: [0, 0, 0], camera: [0, 0, 0], rail1: [0, 0, 180], rail2: [0, 0, 180], bar1: [0, 0, 60], bar2: [0, 0, 60] };
 
 function build() {
   if (group) scene.remove(group);
