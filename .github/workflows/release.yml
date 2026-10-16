@@ -83,17 +83,32 @@ jobs:
       - name: Signing key (optional — set the ANDROID_KEYSTORE_* secrets to sign with your own key)
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -n "$KEYSTORE_B64" ]; then
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            {
+              echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.jks"
+              echo "ANDROID_KEYSTORE_PASSWORD=$STORE_PASS"
+              echo "ANDROID_KEY_ALIAS=$KEY_ALIAS"
+              echo "ANDROID_KEY_PASSWORD=$KEY_PASS"
+            } >> "$GITHUB_ENV"
+          else
+            # No secret yet: sign with a throw-away key so the APK still installs
+            # (each build then has a different key — uninstall the old app before updating).
+            keytool -genkeypair -keystore "$RUNNER_TEMP/release.jks" -storepass photobooth -keypass photobooth \
+              -alias photobooth -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Photobooth Remote" -noprompt
+            {
+              echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.jks"
+              echo "ANDROID_KEYSTORE_PASSWORD=photobooth"
+              echo "ANDROID_KEY_ALIAS=photobooth"
+              echo "ANDROID_KEY_PASSWORD=photobooth"
+            } >> "$GITHUB_ENV"
           fi
       - name: Build APK
         working-directory: mobile/android
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease

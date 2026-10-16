@@ -85,7 +85,7 @@ Over Bluetooth they use a small GATT service, documented at the top of `server/l
 - Kotlin with no libraries.
 - Build with `./gradlew assembleRelease` (needs the Android SDK).
 - CI signs it with the `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` secrets when they're set, and otherwise with a debug key.
-- Set them before you share the app widely, so later versions can update over earlier ones.
+- Without the secrets, every build gets a new throw-away key, so Android won't install a new version over an old one: uninstall the old app first. Set the secrets once to avoid this.
 
 **iOS** (`mobile/ios`):
 - SwiftUI with no libraries.
