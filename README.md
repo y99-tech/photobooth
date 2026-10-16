@@ -5,7 +5,7 @@ A light but powerful photobooth for weddings and events.
 - **Cameras:** a DSLR or mirrorless camera over USB (with live view), or any webcam
 - **Runs on:** Raspberry Pi, Linux, Windows (macOS works too)
 - **Screens:** built for big touch screens, with large buttons, an on-screen keyboard and kiosk mode. It scales from a phone up to a 4K TV.
-- **Control:** tap the screen, press a **Bluetooth** shutter button or clicker, or use the **phone remote over Wi-Fi**
+- **Control:** tap the screen, press a **Bluetooth** shutter button or clicker, use the **phone remote over Wi-Fi**, or the **Booth Remote app for iPhone and Android** (Wi-Fi, Bluetooth or NFC)
 - **Greetings:** guests pick or type a greeting and their name. It's printed on the photo in a choice of frames, or on your own PNG frame.
 - **Sharing:**
   - **Wi-Fi QR code:** guests download the photo to their phone. This works with no internet.
@@ -25,7 +25,7 @@ A light but powerful photobooth for weddings and events.
 - **Green screen:** removes a green or blue backdrop and puts guests on a background they choose. They see it live while posing. It comes with 4 built-in backgrounds, and you can upload your own.
 - **Printing:** a Print button with copies on the share screen, or auto-print every photo. Works on Pi/Linux (CUPS) and Windows. Includes a paper counter and per-guest limits.
 - **Reliable:** every upload is queued on disk and retried, so photos survive a flaky venue Wi-Fi or a reboot
-- **Light:** 7 small npm dependencies, no build step, no database and no native modules. It runs on a Pi 4 and up; a Pi 3B+ works without the AI features.
+- **Light:** 8 small npm dependencies, no build step and no database. The only native module, Bluetooth for the phone app, is optional. It runs on a Pi 4 and up; a Pi 3B+ works without the AI features.
 
 **Enjoying the photobooth?** [☕ Buy me a coffee via PayPal](https://www.paypal.com/donate/?business=mohamed2000youssry%40gmail.com&item_name=Buy+me+a+coffee+-+Photobooth&currency_code=USD). It keeps the project going. Thank you!
 
@@ -119,6 +119,12 @@ Set the camera to **JPEG** (or RAW+JPEG). **Turn auto power-off off** on the cam
   - see the latest photo and its upload status
 
   A Bluetooth selfie button paired with the *phone* also triggers the shot while the remote page is open.
+- **Booth Remote app (iPhone & Android):** does everything the phone remote does, plus reprints and booth health. It connects in three ways:
+  - **Wi-Fi:** the app finds the booth by itself. The booth announces itself on the network and answers on `http://photobooth.local:8080`.
+  - **Bluetooth:** works with **no Wi-Fi at all**, for example in a garden or a hall with bad Wi-Fi. It's on by default on Windows and Mac.
+  - **NFC:** stick an NFC sticker on the booth and touch it with the phone to connect.
+
+  Downloads and setup are in [mobile/README.md](mobile/README.md).
 - **Keyboard:** Esc goes back to the start screen.
 
 ## Greetings & frames
@@ -323,6 +329,7 @@ Environment variables:
 - Change the admin PIN, and set a separate `booth.remotePin` for the phone remote.
 - Keep the booth on a private or event Wi-Fi network. Guest photo links use random IDs.
 - API tokens stay on the booth, in `config.json`. They are never sent to the kiosk or to guests' browsers.
+- **Bluetooth:** the phone app sends the remote PIN with every command, unencrypted. Anyone close by with a Bluetooth sniffer could read it, so use a remote PIN that is different from the admin PIN. Set `link.bluetooth: false` if you don't use it.
 
 ## ☕ Support
 
