@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>Booth Remote</string>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>ar</string>
+    </array>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+    <key>UIUserInterfaceStyle</key>
+    <string>Dark</string>
+    <key>UILaunchScreen</key>
+    <dict/>
+
+    <!-- Wi-Fi: find the booth with Bonjour and talk to it over plain HTTP on the local network -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Finds the photobooth on this Wi-Fi so you can control it.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_photobooth._tcp</string>
+    </array>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
+
+    <!-- Bluetooth LE: control the booth with no Wi-Fi -->
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Connects to the photobooth over Bluetooth when there is no Wi-Fi.</string>
+
+    <!-- NFC: touch the sticker on the booth -->
+    <key>NFCReaderUsageDescription</key>
+    <string>Reads the NFC sticker on the photobooth to connect to it.</string>
+
+    <!-- "Open in app" link from the booth's web remote: photobooth://connect?url=… -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>app.photobooth.remote</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>photobooth</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

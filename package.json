@@ -1,6 +1,6 @@
 {
   "name": "photobooth",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Light but powerful photobooth: DSLR (gphoto2) or webcam, greetings, and sharing to social, Wi-Fi QR, Google Drive, FTP hosting and digital wedding platforms.",
   "main": "server/index.js",
   "type": "commonjs",
@@ -17,10 +17,14 @@
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",
     "basic-ftp": "^6.2.1",
+    "bonjour-service": "^1.4.4",
     "express": "^5.2.1",
     "gifenc": "^1.0.3",
     "nodemailer": "^10.0.11",
     "qrcode": "^1.5.4",
     "yazl": "^3.3.1"
+  },
+  "optionalDependencies": {
+    "@stoprocent/bleno": "^0.13.1"
   }
 }

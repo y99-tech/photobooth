@@ -36,6 +36,16 @@ Photos and settings are saved in **Documents\Photobooth**.
 2. Open a terminal in the folder and run `./scripts/install-pi.sh`.
 3. Reboot. The booth then starts by itself, full-screen.
 
+### 📱 Phone app — Booth Remote (new)
+Control the booth from your phone over **Wi-Fi**, **Bluetooth** (no Wi-Fi needed) or by touching an **NFC sticker** on the booth. It works in English and Arabic.
+- **Android:** download **`PhotoboothRemote-Android-….apk`** below on the phone and open it. Allow *Install unknown apps* for your browser when Android asks.
+- **iPhone:** the app is installed with the free tool [xtool](https://xtool.sh) and your Apple ID. You don't need a Mac or a paid account.
+  1. Install xtool ([Windows/Linux](https://xtool.sh/documentation/xtooldocs/installation-linux), [Mac](https://xtool.sh/documentation/xtooldocs/installation-macos)) and sign in once with `xtool auth login`.
+  2. Plug in the iPhone and run `xtool install PhotoboothRemote-iPhone-….ipa`.
+  3. On the iPhone, trust the developer in *Settings → General → VPN & Device Management*.
+  4. With a free Apple ID, xtool must reinstall the app every 7 days.
+- **NFC sticker:** in the phone app, tap *Write this booth on an NFC sticker* (Android). Any phone that touches the sticker then opens the booth.
+
 ### First steps (any system)
 1. Open **Admin**: `Ctrl+Shift+A` on Windows, or `http://localhost:8080/admin`. The PIN is **1234**. **Change it.**
 2. Set the couple's names and greetings, then turn on the sharing and printing you want. Press **Save & test** for each service.

@@ -12,6 +12,7 @@ const media = require('./media');
 const events = require('./events');
 const keepsake = require('./keepsake');
 const health = require('./health');
+const link = require('./link');
 const { baseUrl, lanIp } = require('./util');
 
 config.load();
@@ -45,6 +46,7 @@ function assetFile(name) {
 const BACKGROUNDS = path.join(store.DIRS.data, 'backgrounds');
 fs.mkdirSync(BACKGROUNDS, { recursive: true });
 
+const port = Number(process.env.PORT) || config.get().port;
 app.disable('x-powered-by');
 app.use(express.json({ limit: '2mb' }));
 
@@ -59,10 +61,12 @@ function adminAuth(req, res, next) {
   if (safeEq(req.get('x-pin') || req.query.pin, config.get().adminPin)) return next();
   res.status(401).json({ error: 'Wrong PIN' });
 }
-function remoteAuth(req, res, next) {
+function remotePinOk(pin) {
   const c = config.get();
-  const pin = req.get('x-pin') || req.query.pin;
-  if (safeEq(pin, c.booth.remotePin || c.adminPin)) return next();
+  return safeEq(pin, c.booth.remotePin || c.adminPin);
+}
+function remoteAuth(req, res, next) {
+  if (remotePinOk(req.get('x-pin') || req.query.pin)) return next();
   res.status(401).json({ error: 'Wrong PIN' });
 }
 
@@ -73,6 +77,7 @@ let kioskState = { screen: 'attract', at: Date.now() };
 function broadcast(type, data) {
   const msg = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const res of clients) res.write(msg);
+  link.push(type, data); // phones connected over Bluetooth
 }
 
 app.get('/api/events', (req, res) => {
@@ -129,7 +134,7 @@ app.post('/api/kiosk/state', (req, res) => {
   res.json({ ok: true });
 });
 
-// Phone remote → kiosk commands.
+// Phone remote → kiosk commands (web remote and the phone apps over Wi-Fi).
 const REMOTE_CMDS = new Set(['shoot', 'retake', 'accept', 'home', 'mode', 'template', 'greeting', 'camera', 'reload']);
 app.post('/api/remote', remoteAuth, (req, res) => {
   const { cmd, value } = req.body || {};
@@ -137,7 +142,31 @@ app.post('/api/remote', remoteAuth, (req, res) => {
   broadcast('remote', { cmd, value });
   res.json({ ok: true });
 });
-app.get('/api/remote/check', remoteAuth, (req, res) => res.json({ ok: true, print: printer.status() }));
+app.get('/api/remote/check', remoteAuth, (req, res) => res.json({ ok: true, print: printer.status(), state: kioskState }));
+
+// Who is this booth? (no PIN — the phone apps use it to confirm they found a photobooth)
+function hello() {
+  return { app: 'photobooth', name: link.name(), boothId: link.boothId(), version: link.VERSION, url: baseUrl(), host: link.host() + '.local', port,
+    bluetooth: link.status(port, baseUrl()).bluetooth !== 'off' };
+}
+app.get('/api/remote/hello', (req, res) => res.json(hello()));
+
+// Same commands over Bluetooth (see server/link.js for the protocol).
+async function bluetoothCommand({ cmd, value, pin }) {
+  if (cmd === 'hello') return hello();
+  if (!remotePinOk(pin)) throw Object.assign(new Error('Wrong PIN'), { status: 401 });
+  if (cmd === 'check') return { print: printer.status(), state: kioskState };
+  if (cmd === 'health') return { health: await health.check() };
+  if (cmd === 'print') {
+    const v = value || {};
+    const p = v.id ? store.get(v.id) : store.list({ limit: 1, filter: (x) => inEvent(x) && (x.kind || 'photo') === 'photo' })[0];
+    if (!p) throw new Error('No photo to print yet');
+    return { job: startPrint(p, v.copies || 1, 'admin').id, photo: p.id };
+  }
+  if (!REMOTE_CMDS.has(cmd)) throw new Error('Unknown command');
+  broadcast('remote', { cmd, value });
+  return {};
+}
 
 // Host prints (or reprints) a photo from the phone — not limited like guests.
 app.post('/api/remote/print/:id', remoteAuth, (req, res) => {
@@ -501,6 +530,9 @@ app.get('/api/admin/highlight.mp4', adminAuth, (req, res) => {
   res.sendFile(j.file);
 });
 
+// Phone app links (Wi-Fi discovery, Bluetooth, NFC tag text) for the admin page.
+app.get('/api/admin/link', adminAuth, (req, res) => res.json(link.status(port, baseUrl())));
+
 // ---------- health (phone remote + admin) ----------
 app.get('/api/health', remoteAuth, async (req, res) => res.json(await health.check()));
 setInterval(async () => {
@@ -613,10 +645,10 @@ app.get('/remote', page('remote.html'));
 app.get('/admin', page('admin.html'));
 app.use(express.static(PUBLIC, { maxAge: '1h' }));
 
-const port = Number(process.env.PORT) || config.get().port;
 events.migrate();
 share.start();
 const server = app.listen(port, '0.0.0.0');
+server.once('listening', () => link.start({ port, onCommand: bluetoothCommand }));
 
 // Resolves when the booth is reachable; the Windows desktop app waits on this.
 const ready = new Promise((resolve, reject) => {

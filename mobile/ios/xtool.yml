@@ -1,0 +1,7 @@
+version: 1
+bundleID: app.photobooth.remote
+infoPath: Info.plist
+iconPath: Resources/AppIcon.png
+# In-app NFC reading needs a paid Apple Developer account. With one, uncomment the next line
+# (see README.md). Without it, iPhones still read the sticker by themselves: see README.md.
+# entitlementsPath: NFC.entitlements

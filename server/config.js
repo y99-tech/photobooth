@@ -52,6 +52,14 @@ const DEFAULTS = {
     triggerKeys: ['Enter', ' ', 'AudioVolumeUp', 'AudioVolumeDown', 'PageDown', 'PageUp', 'ArrowRight', 'F5', 'b']
   },
 
+  // Photobooth Remote phone app (iOS / Android): how phones find and talk to the booth.
+  link: {
+    name: '', // booth name shown in the app (empty = event title)
+    host: 'photobooth', // the booth answers on http://photobooth.local:<port> (change it if you run 2 booths)
+    bonjour: true, // announce the booth on the Wi-Fi so the app finds it by itself
+    bluetooth: 'auto' // true | false | "auto" (on for Windows & Mac; on Linux/Pi it needs setup, see README)
+  },
+
   branding: {
     // Upload a transparent PNG logo in Admin → it is stamped on every photo, GIF and video.
     logoPosition: 'bottom-right', // top-left | top-right | bottom-left | bottom-right | bottom-center

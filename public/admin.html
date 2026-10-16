@@ -127,6 +127,12 @@
     </div>
 
     <div class="card">
+      <h2 style="margin-top:0">📱 Phone app (iOS &amp; Android)</h2>
+      <p class="muted">The <b>Photobooth Remote</b> app controls the booth over <b>Wi-Fi</b>, <b>Bluetooth</b> or by touching an <b>NFC</b> sticker. It asks for the remote PIN (Booth → remotePin, or the admin PIN). Settings are in the <b>Phone app</b> tab.</p>
+      <div id="linkInfo" class="muted">Checking…</div>
+    </div>
+
+    <div class="card">
       <h2 style="margin-top:0">📤 Recent photos &amp; uploads</h2>
       <div class="row" style="justify-content:flex-start;margin-bottom:10px" id="pf">
         <button class="btn sel" data-pf="">All</button><button class="btn" data-pf="booth">📷 Booth</button><button class="btn" data-pf="guest">📱 Guest uploads</button>
@@ -159,7 +165,9 @@
     'booth.language': 'en · ar · fr · es', 'booth.languages': 'one per line — guests can switch on the start screen (e.g. en and ar)',
     'handsFree.enabled': 'camera watches for ✌️ 👍 😁 (offline AI) — no touching needed',
     'booth.triggerKeys': 'one key per line (Bluetooth shutter / clicker keys)', 'share.wedding.urlPath': 'dot path to the photo URL in the JSON reply, e.g. data.url',
-    publicBaseUrl: 'empty = auto (http://LAN-IP:port)', caption: 'placeholders: {greeting} {guest} {title} {hashtag} {url} {date}'
+    publicBaseUrl: 'empty = auto (http://LAN-IP:port)',
+    'link.bluetooth': 'auto (on for Windows & Mac) | true | false', 'link.host': 'the booth answers on http://NAME.local — use a different name for each booth',
+    'link.name': 'name shown in the phone app (empty = event title)', caption: 'placeholders: {greeting} {guest} {title} {hashtag} {url} {date}'
   };
 
   async function api(url, opts = {}) {
@@ -234,6 +242,7 @@
     ['Hands-free', ['handsFree']],
     ['Guestbook, uploads & mosaic', ['guestbook', 'guestUploads', 'mosaic', 'leads']],
     ['Printing', ['print']],
+    ['Phone app', ['link']],
     ['Sharing', ['share']]
   ];
 
@@ -337,6 +346,21 @@
     setTimeout(printers, 1500);
   }
 
+  async function linkInfo() {
+    try {
+      const l = await api('/api/admin/link');
+      const bt = { poweredOn: '✅ on', starting: '⏳ starting', off: 'off', unavailable: '❌ not available', poweredOff: '❌ Bluetooth is switched off', unsupported: '❌ this computer cannot do it', unauthorized: '❌ no permission' }[l.bluetooth] || l.bluetooth;
+      $('#linkInfo').innerHTML = `
+        <b>Booth name in the app:</b> ${esc(l.name)} <span class="muted">(${esc(l.id)})</span><br>
+        <b>Wi-Fi:</b> ${l.bonjour ? '✅ the app finds the booth by itself' : 'type the address by hand'} · <b>Bluetooth:</b> ${esc(bt)}${l.bluetoothError ? ` <span class="muted">(${esc(l.bluetoothError)})</span>` : ''} · <b>Phones on Bluetooth:</b> ${l.bluetoothPhones}<br>
+        <b>NFC sticker:</b> write this web address on an NTAG213/215 sticker (the Android app can write it for you, or use any "NFC Tools" app):<br>
+        <code style="user-select:all">${esc(l.nfc.stable)}</code> <span class="muted">— stays the same at every venue</span><br>
+        <code style="user-select:all">${esc(l.nfc.current)}</code> <span class="muted">— this Wi-Fi only (use it if <i>${esc(l.host)}</i> doesn't open)</span>`;
+    } catch (e) {
+      $('#linkInfo').textContent = e.message;
+    }
+  }
+
   async function printers() {
     try {
       const r = await api('/api/admin/printers');
@@ -430,6 +454,7 @@
     sys();
     photos();
     printers();
+    linkInfo();
     bgs();
     profiles();
     highlight();

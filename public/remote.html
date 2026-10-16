@@ -40,6 +40,7 @@
       <input id="pin" class="field" type="password" inputmode="numeric" placeholder="PIN" autocomplete="off">
       <div class="row" style="margin-top:12px;justify-content:flex-start"><button class="btn primary" id="go">Connect</button></div>
       <p id="err" style="color:var(--err)"></p>
+      <p class="muted" style="font-size:15px"><a class="openApp" style="color:var(--accent)">📲 Open in the Photobooth Remote app</a> (if it is installed — it also works over Bluetooth)</p>
     </div>
 
     <div id="ctl" class="hidden">
@@ -96,7 +97,7 @@
         </div>
         <div class="muted" id="printMsg" style="margin-top:8px;font-size:15px"></div>
       </div>
-      <p class="muted" style="text-align:center"><a href="/gallery" style="color:var(--accent)">Open gallery</a></p>
+      <p class="muted" style="text-align:center"><a href="/gallery" style="color:var(--accent)">Open gallery</a> · <a class="openApp" style="color:var(--accent)">📲 Open in app</a></p>
     </div>
   </div>
 
@@ -232,6 +233,10 @@
     if (e.target.matches('input, textarea')) return;
     if (['AudioVolumeUp', 'AudioVolumeDown', 'Enter', ' '].includes(e.key)) { e.preventDefault(); send('shoot'); }
   });
+
+  // Hand this booth over to the phone app (e.g. after touching the NFC sticker on an iPhone).
+  const appLink = 'photobooth://connect?url=' + encodeURIComponent(location.origin);
+  document.querySelectorAll('.openApp').forEach((a) => (a.href = appLink));
 
   if (pin) login();
 })();
